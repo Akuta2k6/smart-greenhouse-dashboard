@@ -1,16 +1,32 @@
-# React + Vite
+# 🍓 Smart Strawberry Greenhouse - IoT Dashboard
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+Hệ thống Dashboard giám sát và tự động hóa nhà kính trồng dâu tây thông minh tích hợp IoT. Dự án được phát triển nhằm phục vụ cho học phần **Kỹ thuật phần mềm (Software Engineering)**, cung cấp giao diện trực quan để theo dõi thông số môi trường, điều khiển thiết bị chấp hành và quản lý cơ chế an toàn (Failsafe) theo thời gian thực.
 
-Currently, two official plugins are available:
+---
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## 🚀 Các Tính năng Chính
 
-## React Compiler
+* **📊 Giám sát Telemetry Real-time:** Theo dõi các thông số môi trường quan trọng theo thời gian thực (Nhiệt độ không khí, Độ ẩm đất/không khí, độ dẫn điện EC, và độ pH dung dịch dinh dưỡng).
+* **🗺️ Sơ đồ Phân vùng (Zones Topology):** Quản lý độc lập các khu vực trồng dâu công nghệ cao khác nhau (Ví dụ: Khu 1 - Dâu Hana Nhật Bản, Khu 2 - Tochiotome, Khu 3 - Shizuka Premium).
+* **⚡ Bảng điều khiển Actuators (Manual Override):** Cho phép người vận hành bật/tắt thủ công các thiết bị chấp hành (Bơm tưới nhỏ giọt, quạt thông gió, lưới che nắng, van châm phân) kèm theo chế độ chuyển đổi linh hoạt.
+* **🛡️ Cơ chế Failsafe & Quản lý Mã lỗi:** Tích hợp bảo vệ phần cứng thông minh (Ví dụ: Tự động khóa rơ-le bơm khi mực nước bồn chứa dưới 15% với mã lỗi `ERR_WATER_TANK_DEPLETED`).
+* **🚨 Nhật ký Sự cố (Incident Logs):** Lưu trữ lịch sử cảnh báo nhiệt độ, sự cố cảm biến và trạng thái xử lý lỗi của hệ thống.
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+---
 
-## Expanding the Oxlint configuration
+## 🧰 Công nghệ Sử dụng
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and Oxlint's TypeScript related rules in your project.
+* **Frontend Framework:** [React](https://react.dev/) + [Vite](https://vitejs.dev/)
+* **Styling:** [Tailwind CSS (v4)](https://tailwindcss.com/)
+* **Icons:** [Lucide React](https://lucide.dev/)
+* **Ngôn ngữ:** JavaScript (JSX)
+
+---
+
+## ⚙️ Hướng dẫn Cài đặt & Chạy Dự án
+
+Để chạy ứng dụng ở môi trường cục bộ (Local), hãy đảm bảo máy tính của bạn đã cài đặt [Node.js (v18 trở lên)](https://nodejs.org/).
+
+1. **Clone repository về máy:**
+   ```bash
+   git clone [https://github.com/Akuta2k6/smart-greenhouse-dashboard.git](https://github.com/Akuta2k6/smart-greenhouse-dashboard.git)
