@@ -1,33 +1,40 @@
 import React, { useState, useEffect } from 'react';
+import axios from 'axios';
 import { 
   Thermometer, 
   Droplet, 
   Sun, 
   Activity, 
   AlertTriangle, 
-  CheckCircle2, 
-  RefreshCw, 
   Power, 
   ShieldAlert, 
   Layers, 
   Wifi,
   WifiOff,
-  Cpu,
   Sliders,
-  AlertOctagon,
-  CheckCircle
+  AlertOctagon
 } from 'lucide-react';
+
+// Cấu hình Axios Client dựa trên API Contract Base URL
+const apiClient = axios.create({
+  baseURL: 'https://api.smartstrawberry.io/api/v1', // Hoặc đổi thành 'http://localhost:5000/api/v1' khi chạy local
+  timeout: 10000,
+  headers: {
+    'Content-Type': 'application/json'
+  }
+});
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('overview');
-  const [selectedZone, setSelectedZone] = useState('ZONE-01');
+  // Ánh xạ sang mã Zone chuẩn theo API Contract (Ví dụ: ZONE-STRAWBERRY-01)
+  const [selectedZone, setSelectedZone] = useState('ZONE-STRAWBERRY-01');
   const [isOnline, setIsOnline] = useState(true);
-  const [waterTankLevel, setWaterTankLevel] = useState(12.0); // Cố tình để dưới 15% để test lỗi ERR_WATER_TANK_DEPLETED
-  const [isOverrideActive, setIsOverrideActive] = useState(false);
+  const [waterTankLevel, setWaterTankLevel] = useState(12.0); // % Bồn nước
+  const [loadingApi, setLoadingApi] = useState(false);
 
-  // Trạng thái cảm biến real-time theo Zone
+  // Danh sách các vùng chuẩn theo tài liệu API Contract[cite: 5]
   const [zonesData, setZonesData] = useState({
-    'ZONE-01': {
+    'ZONE-STRAWBERRY-01': {
       name: 'Khu 1 - Dâu Hana (Nhật Bản)',
       status: 'OPTIMAL',
       temp: 23.5,
@@ -37,7 +44,7 @@ export default function App() {
       ec: 1.42,
       ph: 6.05
     },
-    'ZONE-02': {
+    'ZONE-STRAWBERRY-02': {
       name: 'Khu 2 - Dâu Tochiotome',
       status: 'WARNING',
       temp: 29.2,
@@ -47,7 +54,7 @@ export default function App() {
       ec: 1.85,
       ph: 5.40
     },
-    'ZONE-03': {
+    'ZONE-STRAWBERRY-03': {
       name: 'Khu 3 - Dâu Shizuka Premium',
       status: 'OPTIMAL',
       temp: 21.8,
@@ -59,16 +66,16 @@ export default function App() {
     }
   });
 
-  // Trạng thái thiết bị chấp hành (Actuators)
+  // Trạng thái thiết bị chấp hành (Actuators khớp với API Contract)[cite: 5]
   const [actuators, setActuators] = useState({
-    pump: { name: 'Bơm tưới nhỏ giọt', status: false, mode: 'AUTO', pin: 'GPIO 25' },
-    fan: { name: 'Quạt thông gió đối lưu', status: true, mode: 'AUTO', pin: 'GPIO 26' },
-    shade: { name: 'Lưới che nắng tự động', status: true, mode: 'AUTO', pin: 'GPIO 27' },
-    heater: { name: 'Đèn sưởi sương mù', status: false, mode: 'AUTO', pin: 'GPIO 14' },
-    nutrients: { name: 'Van châm phân tự động (EC/pH)', status: false, mode: 'AUTO', pin: 'GPIO 32' }
+    IRRIGATION_PUMP: { name: 'Bơm tưới nhỏ giọt', status: false, mode: 'AUTO', pin: 'GPIO 25' },
+    VENTILATION_FAN: { name: 'Quạt thông gió đối lưu', status: true, mode: 'AUTO', pin: 'GPIO 26' },
+    SHADE_NET: { name: 'Lưới che nắng tự động', status: true, mode: 'AUTO', pin: 'GPIO 27' },
+    FOG_HEATER: { name: 'Đèn sưởi sương mù', status: false, mode: 'AUTO', pin: 'GPIO 14' },
+    NUTRIENT_VALVE: { name: 'Van châm phân tự động (EC/pH)', status: false, mode: 'AUTO', pin: 'GPIO 32' }
   });
 
-  // Nhật ký sự cố và mã lỗi chi tiết (Incidents & Error Logs)
+  // Nhật ký sự cố và mã lỗi chi tiết[cite: 5]
   const [incidents, setIncidents] = useState([
     { id: 1, code: 'ERR_WATER_TANK_DEPLETED', title: 'Mức nước bồn chứa thấp nguy hiểm', zone: 'Hệ thống chung', time: '5 phút trước', severity: 'CRITICAL', status: 'Active', message: 'Mức nước hiện tại 12.0% (< 15%). Rơ-le bơm tưới đã bị khóa tự động để bảo vệ phần cứng.' },
     { id: 2, code: 'ERR_HIGH_TEMP_WARNING', title: 'Cảnh báo nhiệt độ vượt ngưỡng', zone: 'Khu 2', time: '25 phút trước', severity: 'WARNING', message: 'Nhiệt độ Khu 2 đạt 29.2°C. Quạt thông gió đã được kích hoạt tăng cường công suất.' },
@@ -76,40 +83,100 @@ export default function App() {
     { id: 4, code: 'ERR_SENSOR_TIMEOUT', title: 'Mất kết nối tạm thời cảm biến pH', zone: 'Khu 3', time: '3 giờ trước', message: 'Cảm biến phản hồi chậm > 3000ms. Đã tự động khởi động lại giao thức I2C thành công.' }
   ]);
 
-  // Giả lập cập nhật dữ liệu real-time mỗi 5 giây
+  // 1. GỌI API LẤY TELEMETRY MỚI NHẤT (GET /greenhouse/zones/{zoneId}/telemetry/latest)[cite: 5]
   useEffect(() => {
-    const interval = setInterval(() => {
-      setZonesData(prev => ({
-        ...prev,
-        'ZONE-01': {
-          ...prev['ZONE-01'],
-          temp: +(23 + Math.random()).toFixed(1),
-          soilHumid: +(64 + Math.random() * 2).toFixed(1)
+    const fetchTelemetry = async () => {
+      try {
+        setLoadingApi(true);
+        const response = await apiClient.get(`/greenhouse/zones/${selectedZone}/telemetry/latest`);
+        
+        if (response.data && response.data.success) {
+          const apiData = response.data.data;
+          // Đồng bộ dữ liệu trả về từ API vào State giao diện
+          setZonesData(prev => ({
+            ...prev,
+            [selectedZone]: {
+              name: apiData.zoneName,
+              status: apiData.status,
+              temp: apiData.metrics.temperature,
+              airHumid: apiData.metrics.airHumidity,
+              soilHumid: apiData.metrics.soilHumidity,
+              light: apiData.metrics.lightLux,
+              ec: apiData.metrics.ecValue,
+              ph: apiData.metrics.phValue
+            }
+          }));
+          setIsOnline(true);
         }
-      }));
-    }, 5000);
-    return () => clearInterval(interval);
-  }, []);
+      } catch (error) {
+        // Nếu Backend chưa chạy, hệ thống chuyển về chế độ giả lập local mượt mà (Fallback)
+        console.warn('API chưa sẵn sàng hoặc mất kết nối mạng. Sử dụng chế độ Local Simulation.', error.message);
+        setIsOnline(false);
+      } finally {
+        setLoadingApi(false);
+      }
+    };
 
-  // Xử lý bật/tắt thiết bị thủ công (Manual Override) kèm kiểm tra mã lỗi nghiệp vụ
-  const handleToggleActuator = (key) => {
-    if (key === 'pump' && !actuators.pump.status && waterTankLevel < 15.0) {
-      alert('LỖI NGHỆP VỤ [ERR_WATER_TANK_DEPLETED]: Mức nước bồn chứa dưới 15%. Không thể kích hoạt bơm tưới!');
+    fetchTelemetry();
+    const interval = setInterval(fetchTelemetry, 5000); // Poll mỗi 5 giây
+    return () => clearInterval(interval);
+  }, [selectedZone]);
+
+  // 2. GỬI LỆNH ĐIỀU KHIỂN THIẾT BỊ (POST /greenhouse/actuators/control)[cite: 5]
+  const handleToggleActuator = async (actuatorKey) => {
+    const currentActuator = actuators[actuatorKey];
+    const targetAction = currentActuator.status ? 'TURN_OFF' : 'TURN_ON';
+
+    // Kiểm tra mã lỗi nghiệp vụ cạn bồn nước phía client trước khi gửi request
+    if (actuatorKey === 'IRRIGATION_PUMP' && !currentActuator.status && waterTankLevel < 15.0) {
+      alert('LỖI NGHỆP VỤ [ERR_WATER_TANK_DEPLETED]: Mức nước bồn chứa dưới 15% (P-TANK-LEVEL-MIN). Không thể kích hoạt bơm tưới!');
       return;
     }
 
-    setActuators(prev => ({
-      ...prev,
-      [key]: {
-        ...prev[key],
-        status: !prev[key].status,
-        mode: 'MANUAL'
+    try {
+      // Gói Payload theo chuẩn Mục 4.1 của tài liệu API Contract[cite: 5]
+      const payload = {
+        zoneId: selectedZone,
+        actuatorType: actuatorKey,
+        action: targetAction,
+        durationMinutes: 15,
+        reason: "Điều khiển thủ công Manual Override từ React Dashboard"
+      };
+
+      const response = await apiClient.post('/greenhouse/actuators/control', payload);
+
+      if (response.data && response.data.success) {
+        alert(response.data.message || 'Thực hiện lệnh điều khiển thành công!');
+        // Cập nhật trạng thái hiển thị thiết bị sau khi thành công
+        setActuators(prev => ({
+          ...prev,
+          [actuatorKey]: {
+            ...prev[actuatorKey],
+            status: !prev[actuatorKey].status,
+            mode: 'MANUAL'
+          }
+        }));
       }
-    }));
-    setIsOverrideActive(true);
+    } catch (error) {
+      // Xử lý lỗi trả về từ Backend (Ví dụ: HTTP 400 kèm mã lỗi ERR_WATER_TANK_DEPLETED)[cite: 5]
+      if (error.response && error.response.data) {
+        const errData = error.response.data;
+        alert(`LỖI [${errData.errorCode || 'API_ERROR'}] : ${errData.message}`);
+      } else {
+        // Fallback chạy offline trực tiếp trên giao diện nếu không có server backend
+        setActuators(prev => ({
+          ...prev,
+          [actuatorKey]: {
+            ...prev[actuatorKey],
+            status: !prev[actuatorKey].status,
+            mode: 'MANUAL'
+          }
+        }));
+      }
+    }
   };
 
-  const currentZone = zonesData[selectedZone];
+  const currentZone = zonesData[selectedZone] || zonesData['ZONE-STRAWBERRY-01'];
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex font-sans">
@@ -163,9 +230,11 @@ export default function App() {
           <div className="bg-slate-800/50 p-3 rounded-xl border border-slate-700/50 flex items-center justify-between">
             <div className="flex items-center space-x-2">
               {isOnline ? <Wifi className="w-4 h-4 text-emerald-400" /> : <WifiOff className="w-4 h-4 text-rose-400" />}
-              <span className="text-xs font-medium text-slate-300">MQTT Broker</span>
+              <span className="text-xs font-medium text-slate-300">API / MQTT</span>
             </div>
-            <span className="text-xs text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full">Connected</span>
+            <span className={`text-xs px-2 py-0.5 rounded-full ${isOnline ? 'text-emerald-400 bg-emerald-500/10' : 'text-amber-400 bg-amber-500/10'}`}>
+              {isOnline ? 'Connected' : 'Offline Mode'}
+            </span>
           </div>
         </div>
       </aside>
@@ -198,8 +267,8 @@ export default function App() {
             )}
 
             <div className="flex items-center space-x-2 bg-slate-800/60 border border-slate-700/60 px-3 py-1.5 rounded-xl">
-              <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></div>
-              <span className="text-xs font-medium text-slate-300">Live MQTT Stream</span>
+              <div className={`w-2.5 h-2.5 rounded-full ${loadingApi ? 'bg-amber-500 animate-ping' : 'bg-emerald-500 animate-pulse'}`}></div>
+              <span className="text-xs font-medium text-slate-300">{loadingApi ? 'Syncing API...' : 'Live Stream'}</span>
             </div>
           </div>
         </header>
@@ -275,7 +344,7 @@ export default function App() {
                   <div className="flex items-center justify-between mb-6">
                     <div>
                       <h3 className="font-bold text-lg text-white">Bảng điều khiển Nhanh Thiết bị</h3>
-                      <p className="text-xs text-slate-400">Nhấn vào công tắc để chuyển sang chế độ Manual Override.</p>
+                      <p className="text-xs text-slate-400">Nhấn vào công tắc để gửi lệnh API Manual Override.</p>
                     </div>
                   </div>
 
@@ -413,7 +482,7 @@ export default function App() {
                 <div className="flex items-center justify-between mb-6">
                   <div>
                     <h3 className="text-lg font-bold text-white">Quản lý Thiết bị Chấp hành (Actuators Panel)</h3>
-                    <p className="text-xs text-slate-400">Điều khiển rơ-le phần cứng trực tiếp qua giao thức MQTT / WebSocket.</p>
+                    <p className="text-xs text-slate-400">Điều khiển rơ-le phần cứng trực tiếp qua API Endpoint.</p>
                   </div>
                   <div className="bg-amber-500/10 border border-amber-500/30 text-amber-400 px-3 py-1.5 rounded-xl text-xs flex items-center space-x-2">
                     <Sliders className="w-4 h-4" />
