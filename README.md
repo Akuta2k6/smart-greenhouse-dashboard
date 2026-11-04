@@ -25,12 +25,13 @@ Dự án được phát triển nhằm phục vụ cho học phần **Kỹ thu�
 
 ## 🧰 Công nghệ sử dụng
 
-| Công nghệ | Mô tả |
-|:---|:---|
-| **Frontend Framework** | [React](https://react.dev/) + [Vite](https://vitejs.dev/) |
-| **Styling** | [Tailwind CSS (v4)](https://tailwindcss.com/) |
-| **Icons** | [Lucide React](https://lucide.dev/) |
-| **Ngôn ngữ** | JavaScript (JSX) |
+| Thành phần | Công nghệ | Mô tả |
+|:---|:---|:---|
+| **Frontend Framework** | [React](https://react.dev/) + [Vite](https://vitejs.dev/) | Giao diện quản trị SPA phản hồi thời gian thực |
+| **Styling** | [Tailwind CSS (v4)](https://tailwindcss.com/) | Giao diện Dark-mode tối ưu trải nghiệm |
+| **Icons** | [Lucide React](https://lucide.dev/) | Bộ icon chuyên biệt cho IoT và nông nghiệp |
+| **Backend Runtime** | [Node.js](https://nodejs.org/) + [Express](https://expressjs.com/) | RESTful API Server xử lý logic & Failsafe |
+| **HTTP Client** | [Axios](https://axios-http.com/) | Gửi/nhận yêu cầu API giữa Frontend & Backend |
 
 ---
 
@@ -44,31 +45,28 @@ Dự án được phát triển nhằm phục vụ cho học phần **Kỹ thu�
 git clone https://github.com/Akuta2k6/smart-greenhouse-dashboard.git
 ```
 
-### 2. Di chuyển vào thư mục dự án
+### 2. Khởi động Backend Server (Port 5000)
+
+Mở một cửa sổ Terminal thứ nhất:
 
 ```bash
-cd smart-greenhouse-dashboard/greenhouse-app
+cd greenhouse-backend
+npm install
+node server.js
 ```
 
-### 3. Cài đặt các gói thư viện phụ thuộc
+**Backend Service:** http://localhost:5000
+
+### 3. Khởi động Frontend Client (Port 5173)
+
+Mở một cửa sổ Terminal thứ hai tại thư mục `greenhouse-app`:
 
 ```bash
 npm install
-```
-
-### 4. Khởi động máy chủ phát triển (Dev Server)
-
-```bash
 npm run dev
 ```
 
-### 5. Truy cập ứng dụng
-
-Mở trình duyệt và truy cập đường dẫn hiển thị trên Terminal (thường là):
-
-```text
-http://localhost:5173
-```
+**Frontend Dashboard:** http://localhost:5173
 
 ---
 
@@ -79,13 +77,17 @@ greenhouse-app/
 ├── public/                 # Tài nguyên tĩnh (Favicon, icons)
 ├── src/
 │   ├── assets/             # Hình ảnh và media
-│   ├── App.jsx             # Component điều hướng và giao diện chính
+│   ├── App.jsx             # Component giao diện chính & gọi API Axios
 │   ├── App.css             # Custom style phụ trợ
 │   ├── index.css           # Cấu hình Tailwind CSS
 │   └── main.jsx            # Điểm vào ứng dụng React
+├── greenhouse-backend/     # Thư mục mã nguồn Backend Node.js/Express
+│   ├── server.js           # Express API Server & Logic kiểm tra Failsafe
+│   ├── package.json        # Dependencies của Backend (express, cors)
+│   └── .gitignore          # Cấu hình Git bỏ qua node_modules của Backend
 ├── tailwind.config.js      # Cấu hình Tailwind CSS
-├── postcss.config.cjs      # Cấu hình PostCSS
-└── package.json            # Danh sách thư viện và dependencies
+├── vite.config.js          # Cấu hình Vite & Proxy API Server
+└── package.json            # Dependencies của Frontend
 ```
 
 ---
