@@ -1,0 +1,13 @@
+# Thư viện Node.js
+node_modules/
+
+# File nhật ký lỗi
+*.log
+npm-debug.log*
+
+# File biến môi trường (chứa secret key/password nếu có)
+.env
+
+# Hệ điều hành / Editor
+.DS_Store
+.vscode/

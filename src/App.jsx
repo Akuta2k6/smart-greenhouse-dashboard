@@ -17,7 +17,7 @@ import {
 
 // Cấu hình Axios Client dựa trên API Contract Base URL
 const apiClient = axios.create({
-  baseURL: 'https://api.smartstrawberry.io/api/v1', // Hoặc đổi thành 'http://localhost:5000/api/v1' khi chạy local
+  baseURL: 'http://localhost:5000/api/v1',
   timeout: 10000,
   headers: {
     'Content-Type': 'application/json'
