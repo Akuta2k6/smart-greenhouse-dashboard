@@ -30,21 +30,21 @@ Hệ thống Dashboard giám sát và tự động hóa nhà kính trồng dâu 
 1. **Clone repository về máy:**
    ```bash
    git clone [https://github.com/Akuta2k6/smart-greenhouse-dashboard.git](https://github.com/Akuta2k6/smart-greenhouse-dashboard.git)
-Di chuyển vào thư mục dự án:
+## Di chuyển vào thư mục dự án:
 
-Bash
+## Bash
 cd smart-greenhouse-dashboard/greenhouse-app
 Cài đặt các gói thư viện phụ thuộc:
 
-Bash
+## Bash
 npm install
 Khởi động máy chủ phát triển (Dev Server):
 
-Bash
+## Bash
 npm run dev
 Mở trình duyệt và truy cập đường dẫn hiển thị trên terminal (thường là http://localhost:5173).
 
-📂 Cấu trúc Thư mục Dự án
+## 📂 Cấu trúc Thư mục Dự án
 Plaintext
 greenhouse-app/
 ├── public/             # Tài nguyên tĩnh (Favicon, icons)
@@ -58,7 +58,7 @@ greenhouse-app/
 ├── postcss.config.cjs  # Cấu hình PostCSS
 └── package.json        # Danh sách thư viện và dependencies
 👥 Thành viên Phát triển
-Sinh viên thực hiện: Dương Tấn Quốc Anh (MSSV: 52400169)
+Nhóm thực hiện: OiOiOi3ka
 
 Ngành: Khoa học Máy tính - Khoa Công nghệ Thông tin
 
