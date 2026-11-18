@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
+import apiClient from './services/api';
 import { 
   Thermometer, 
   Droplet, 
@@ -14,15 +14,6 @@ import {
   Sliders,
   AlertOctagon
 } from 'lucide-react';
-
-// Cấu hình Axios Client dựa trên API Contract Base URL
-const apiClient = axios.create({
-  baseURL: 'http://localhost:5000/api/v1',
-  timeout: 10000,
-  headers: {
-    'Content-Type': 'application/json'
-  }
-});
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('overview');
@@ -127,27 +118,23 @@ export default function App() {
     const currentActuator = actuators[actuatorKey];
     const targetAction = currentActuator.status ? 'TURN_OFF' : 'TURN_ON';
 
-    // Kiểm tra mã lỗi nghiệp vụ cạn bồn nước phía client trước khi gửi request
     if (actuatorKey === 'IRRIGATION_PUMP' && !currentActuator.status && waterTankLevel < 15.0) {
-      alert('LỖI NGHỆP VỤ [ERR_WATER_TANK_DEPLETED]: Mức nước bồn chứa dưới 15% (P-TANK-LEVEL-MIN). Không thể kích hoạt bơm tưới!');
+      alert('Mực nước bồn chứa dưới 15%. Không thể kích hoạt bơm tưới!');
       return;
     }
 
     try {
-      // Gói Payload theo chuẩn Mục 4.1 của tài liệu API Contract[cite: 5]
       const payload = {
         zoneId: selectedZone,
         actuatorType: actuatorKey,
         action: targetAction,
         durationMinutes: 15,
-        reason: "Điều khiển thủ công Manual Override từ React Dashboard"
+        reason: 'Manual Override từ React Dashboard'
       };
 
       const response = await apiClient.post('/greenhouse/actuators/control', payload);
 
-      if (response.data && response.data.success) {
-        alert(response.data.message || 'Thực hiện lệnh điều khiển thành công!');
-        // Cập nhật trạng thái hiển thị thiết bị sau khi thành công
+      if (response.data?.success) {
         setActuators(prev => ({
           ...prev,
           [actuatorKey]: {
@@ -156,22 +143,18 @@ export default function App() {
             mode: 'MANUAL'
           }
         }));
+
+        alert(response.data.message || 'Điều khiển thiết bị thành công!');
+      } else {
+        alert(response.data?.message || 'Backend không xác nhận lệnh điều khiển.');
       }
     } catch (error) {
-      // Xử lý lỗi trả về từ Backend (Ví dụ: HTTP 400 kèm mã lỗi ERR_WATER_TANK_DEPLETED)[cite: 5]
-      if (error.response && error.response.data) {
-        const errData = error.response.data;
-        alert(`LỖI [${errData.errorCode || 'API_ERROR'}] : ${errData.message}`);
+      const errData = error.response?.data;
+
+      if (errData) {
+        alert(`LỖI [${errData.errorCode || errData.code || 'API_ERROR'}]: ${errData.message || 'Không thể thực hiện lệnh.'}`);
       } else {
-        // Fallback chạy offline trực tiếp trên giao diện nếu không có server backend
-        setActuators(prev => ({
-          ...prev,
-          [actuatorKey]: {
-            ...prev[actuatorKey],
-            status: !prev[actuatorKey].status,
-            mode: 'MANUAL'
-          }
-        }));
+        alert('Không thể kết nối Backend. Trạng thái thiết bị không thay đổi.');
       }
     }
   };
