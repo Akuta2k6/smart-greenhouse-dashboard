@@ -34,17 +34,26 @@ Last updated: 2026-11-18
 - Tested Backend disconnection.
 - Frontend build passed.
 
-## Current Work
-
 ### Phase 4 - Backend Refactoring
-- Extract in-memory data into data module.
-- Separate actuator validation rules.
-- Separate business logic into services.
-- Separate API controllers and routes.
-- Add error handling middleware.
-- Preserve existing API endpoints.
 
-Status: In progress.
+Status: Completed.
+
+- Separated in-memory data into data module.
+- Created actuator validation rules.
+- Separated business logic into services.
+- Created telemetry and actuator controllers.
+- Created greenhouse API routes.
+- Added 404 and error handling middleware.
+- Preserved existing API endpoints.
+- Verified Backend startup.
+- Verified telemetry API.
+- Verified actuator control.
+- Verified water tank failsafe.
+- Verified Frontend integration.
+
+Manual tests: 5/5 PASS.
+
+## Current Work
 
 ## Pending
 
