@@ -53,11 +53,31 @@ Status: Completed.
 
 Manual tests: 5/5 PASS.
 
+### Phase 5 - Test refactored Backend.
+
+Status: completed.
+
+
+- GET telemetry của zone hợp lệ trả về HTTP 200 (58.7647ms)
+- GET telemetry của zone không tồn tại trả về HTTP 404 (4.0646ms)
+- Điều khiển actuator hợp lệ trả về HTTP 200 (33.0837ms)
+- Điều khiển zone không tồn tại trả về HTTP 404 (4.5393ms)
+- Actuator không hợp lệ trả về HTTP 400 (7.1798ms)
+- Action không hợp lệ trả về HTTP 400 (3.8015ms)
+- Máy bơm bị chặn khi mực nước dưới 15% (3.2916ms)
+- tests 7
+- suites 0
+- pass 7
+- fail 0
+- cancelled 0
+- skipped 0
+- todo 0
+- duration_ms 545.9179
+
 ## Current Work
 
 ## Pending
 
-- Test refactored Backend.
 - Align supported actuator types with Frontend.
 - Add automated Backend tests.
 - Integrate PostgreSQL.
