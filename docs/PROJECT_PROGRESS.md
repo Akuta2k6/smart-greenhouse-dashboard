@@ -53,36 +53,46 @@ Status: Completed.
 
 Manual tests: 5/5 PASS.
 
-### Phase 5 - Test refactored Backend.
+### Phase 5 - Automated Backend Tests
 
-Status: completed.
+Status: Completed.
+
+- Added automated Backend tests using Node.js built-in node:test.
+- Added HTTP API tests using fetch.
+- Tested valid and invalid telemetry requests.
+- Tested actuator control and input validation.
+- Tested water tank failsafe below 15%.
+- All 7 automated tests passed.
 
 
-- GET telemetry của zone hợp lệ trả về HTTP 200 (58.7647ms)
-- GET telemetry của zone không tồn tại trả về HTTP 404 (4.0646ms)
-- Điều khiển actuator hợp lệ trả về HTTP 200 (33.0837ms)
-- Điều khiển zone không tồn tại trả về HTTP 404 (4.5393ms)
-- Actuator không hợp lệ trả về HTTP 400 (7.1798ms)
-- Action không hợp lệ trả về HTTP 400 (3.8015ms)
-- Máy bơm bị chặn khi mực nước dưới 15% (3.2916ms)
-- tests 7
-- suites 0
-- pass 7
-- fail 0
-- cancelled 0
-- skipped 0
-- todo 0
-- duration_ms 545.9179
+## Phase 6 – PostgreSQL Local Integration
 
-## Current Work
+Status: COMPLETED
 
-## Pending
+### Completed
+- Installed and configured PostgreSQL 18.
+- Created database smart_greenhouse_db and role greenhouse_app.
+- Created 10 database tables and required indexes.
+- Seeded greenhouse, zones, devices, thresholds and initial telemetry.
+- Configured PostgreSQL connection using pg and dotenv.
+- Integrated GET Latest Telemetry API with PostgreSQL.
+- Integrated actuator command persistence with PostgreSQL transactions.
+- Enforced a server-side irrigation duration of 120 seconds.
+- Preserved water tank failsafe: pump activation is blocked below 15%.
+- Added integration test verifying actuator command persistence and duration_seconds = 120.
 
-- Align supported actuator types with Frontend.
-- Add automated Backend tests.
-- Integrate PostgreSQL.
-- Build Python Sensor Simulator.
-- Implement Rule Engine.
+### Validation
+- Backend automated tests: 8/8 passed.
+- PostgreSQL telemetry query: successful.
+- Actuator command persistence: successful.
+- Irrigation duration validation: successful.
+- Water tank failsafe validation: successful.
+
+### Pending
+- Python sensor simulator.
+- Automated Rule Engine.
+- Automatic pump shutdown and 15-minute cooldown.
+- Online deployment.
 - Add telemetry history and alerts.
 - Improve Dashboard and charts.
 - Build interactive 2D greenhouse model.

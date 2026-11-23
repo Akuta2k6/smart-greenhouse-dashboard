@@ -128,8 +128,9 @@ export default function App() {
         zoneId: selectedZone,
         actuatorType: actuatorKey,
         action: targetAction,
-        durationMinutes: 15,
-        reason: 'Manual Override từ React Dashboard'
+        ...(actuatorKey === 'IRRIGATION_PUMP' && targetAction === 'TURN_ON'
+          ? { durationSeconds: 120 }
+          : {})
       };
 
       const response = await apiClient.post('/greenhouse/actuators/control', payload);

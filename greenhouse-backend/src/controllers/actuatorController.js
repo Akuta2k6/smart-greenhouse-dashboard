@@ -1,8 +1,8 @@
 
 const { controlActuator } = require('../services/greenhouseService');
 
-const controlActuatorHandler = (req, res) => {
-  const result = controlActuator(req.body);
+const controlActuatorHandler = async (req, res) => {
+  const result = await controlActuator(req.body);
 
   if (!result.success) {
     return res.status(result.status).json({
