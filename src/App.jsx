@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import apiClient from './services/api';
+import apiClient, { getTelemetryLatest } from './services/api';
 import { 
   Thermometer, 
   Droplet, 
@@ -76,42 +76,98 @@ export default function App() {
 
   // 1. GỌI API LẤY TELEMETRY MỚI NHẤT (GET /greenhouse/zones/{zoneId}/telemetry/latest)[cite: 5]
   useEffect(() => {
+    const zoneIds = [
+      'ZONE-STRAWBERRY-01',
+      'ZONE-STRAWBERRY-02',
+      'ZONE-STRAWBERRY-03'
+    ];
+
+    let cancelled = false;
+    let timeoutId;
+    let firstLoad = true;
+
     const fetchTelemetry = async () => {
-      try {
+      if (firstLoad) {
         setLoadingApi(true);
-        const response = await apiClient.get(`/greenhouse/zones/${selectedZone}/telemetry/latest`);
-        
-        if (response.data && response.data.success) {
-          const apiData = response.data.data;
-          // Đồng bộ dữ liệu trả về từ API vào State giao diện
-          setZonesData(prev => ({
-            ...prev,
-            [selectedZone]: {
-              name: apiData.zoneName,
-              status: apiData.status,
-              temp: apiData.metrics.temperature,
-              airHumid: apiData.metrics.airHumidity,
-              soilHumid: apiData.metrics.soilHumidity,
-              light: apiData.metrics.lightLux,
-              ec: apiData.metrics.ecValue,
-              ph: apiData.metrics.phValue
-            }
-          }));
-          setIsOnline(true);
+      }
+
+      try {
+        const results = await Promise.allSettled(
+          zoneIds.map(async (zoneId) => {
+            const response = await getTelemetryLatest(zoneId);
+            return { zoneId, response };
+          })
+        );
+
+        if (cancelled) return;
+
+        const validUpdates = results.flatMap((result) => {
+          if (result.status !== 'fulfilled') return [];
+
+          const { zoneId, response } = result.value;
+
+          if (!response?.success || !response.data?.metrics) {
+            return [];
+          }
+
+          return [{ zoneId, data: response.data }];
+        });
+
+        if (validUpdates.length > 0) {
+          setZonesData((prev) => {
+            const updated = { ...prev };
+
+            validUpdates.forEach(({ zoneId, data }) => {
+              updated[zoneId] = {
+                ...prev[zoneId],
+                name: data.zoneName,
+                status: data.status,
+                temp: data.metrics.temperature,
+                airHumid: data.metrics.airHumidity,
+                soilHumid: data.metrics.soilHumidity,
+                light: data.metrics.lightLux,
+                ec: data.metrics.ecValue,
+                ph: data.metrics.phValue
+              };
+            });
+
+            return updated;
+          });
+
+          setWaterTankLevel(
+            validUpdates[0].data.metrics.waterTankLevel
+          );
+        }
+
+        setIsOnline(validUpdates.length === zoneIds.length);
+
+        if (validUpdates.length < zoneIds.length) {
+          console.warn('Một số khu vực chưa lấy được telemetry.');
         }
       } catch (error) {
-        // Nếu Backend chưa chạy, hệ thống chuyển về chế độ giả lập local mượt mà (Fallback)
-        console.warn('API chưa sẵn sàng hoặc mất kết nối mạng. Sử dụng chế độ Local Simulation.', error.message);
-        setIsOnline(false);
+        if (!cancelled) {
+          console.error('Không thể lấy telemetry:', error.message);
+          setIsOnline(false);
+        }
       } finally {
-        setLoadingApi(false);
+        if (firstLoad) {
+          setLoadingApi(false);
+          firstLoad = false;
+        }
+
+        if (!cancelled) {
+          timeoutId = setTimeout(fetchTelemetry, 5000);
+        }
       }
     };
 
     fetchTelemetry();
-    const interval = setInterval(fetchTelemetry, 5000); // Poll mỗi 5 giây
-    return () => clearInterval(interval);
-  }, [selectedZone]);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timeoutId);
+    };
+  }, []);
 
   // 2. GỬI LỆNH ĐIỀU KHIỂN THIẾT BỊ (POST /greenhouse/actuators/control)[cite: 5]
   const handleToggleActuator = async (actuatorKey) => {
