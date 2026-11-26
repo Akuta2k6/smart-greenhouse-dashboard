@@ -88,10 +88,85 @@ Status: COMPLETED
 - Irrigation duration validation: successful.
 - Water tank failsafe validation: successful.
 
+## Phase 8 – Incident Service & Rule Engine Integration
+
+**Trạng thái: COMPLETED**
+
+### 1. Mục tiêu
+Xây dựng Incident Service và tích hợp với Rule Engine nhằm tự động phát hiện các điều kiện môi trường bất thường, tạo cảnh báo trong cơ sở dữ liệu PostgreSQL và tự động cập nhật trạng thái Incident khi điều kiện trở lại bình thường.
+
+### 2. Các chức năng đã triển khai
+
+- Xây dựng `incidentService.js` để quản lý việc tạo và đồng bộ Incident theo từng Zone.
+- Tích hợp `syncZoneIncidents()` vào `ruleEngineService.js`.
+- Sử dụng transaction và khóa bản ghi Zone (`SELECT ... FOR UPDATE`) để hạn chế tạo Incident trùng khi xử lý đồng thời.
+- Kiểm tra tính hợp lệ của dữ liệu cảm biến trước khi đánh giá điều kiện cảnh báo.
+- Không tự động đóng Incident khi dữ liệu cảm biến không hợp lệ hoặc đã cũ.
+- Tự động chuyển Incident từ `OPEN` sang `RESOLVED` khi điều kiện cảnh báo không còn tồn tại.
+- Cho phép tạo Incident mới khi cùng một điều kiện bất thường tái diễn.
+
+### 3. Các ngưỡng cảnh báo đã triển khai
+
+| Điều kiện | Mức độ ưu tiên |
+|---|---|
+| Nhiệt độ > 25°C và <= 30°C | HIGH |
+| Nhiệt độ > 30°C | CRITICAL |
+| Độ ẩm không khí > 80% | HIGH |
+| Độ ẩm không khí < 50% | HIGH |
+| Mực nước bồn chứa <= 15% | CRITICAL |
+
+### 4. Kết quả kiểm thử
+
+| Nội dung kiểm thử | Kết quả |
+|---|---|
+| Tạo Incident khi nhiệt độ vượt 25°C | PASS |
+| Tạo Incident CRITICAL khi nhiệt độ vượt 30°C | PASS |
+| Chuyển cảnh báo nhiệt độ khi mức độ nguy hiểm thay đổi | PASS |
+| Tạo Incident khi độ ẩm không khí > 80% | PASS |
+| Tạo Incident khi độ ẩm không khí < 50% | PASS |
+| Tạo Incident khi mực nước bồn chứa <= 15% | PASS |
+| Hạn chế tạo Incident trùng khi điều kiện bất thường vẫn tồn tại | PASS |
+| Tự động chuyển Incident sang RESOLVED khi điều kiện bình thường | PASS |
+| Quản lý Incident độc lập theo từng Zone | PASS |
+| Giữ trạng thái Incident khi dữ liệu cảm biến không hợp lệ hoặc đã cũ | PASS |
+
+Các kiểm thử thực tế với PostgreSQL và Python Sensor Simulator đã xác nhận:
+
+- Incident ID 17: cảnh báo độ ẩm không khí cao được tạo và sau đó chuyển sang `RESOLVED`.
+- Incident ID 19: cảnh báo độ ẩm không khí thấp được tạo và sau đó chuyển sang `RESOLVED`.
+- Incident ID 20, 21, 22: cảnh báo mực nước thấp được tạo cho cả ba Zone và sau đó chuyển sang `RESOLVED`.
+- Incident ID 18: cảnh báo nhiệt độ Zone 2 được giữ ở trạng thái `OPEN` khi nhiệt độ vẫn vượt ngưỡng. Đây là hành vi đúng theo quy tắc nghiệp vụ.
+
+### 5. Trạng thái sau kiểm thử
+
+- Đã khôi phục các thông số Sensor Simulator về trạng thái bình thường.
+- Mực nước bồn chứa được khôi phục về 80%.
+- Nhiệt độ các Zone được đưa về khoảng 23–24°C.
+- Độ ẩm không khí Zone 1 được khôi phục về 68.2%.
+- Đã chạy truy vấn kiểm tra cuối cùng trên PostgreSQL: không còn Incident nào ở trạng thái `OPEN` hoặc `IN_PROGRESS`.
+
+### 6. Các file chính liên quan
+
+- `greenhouse-backend/src/services/incidentService.js`
+- `greenhouse-backend/src/services/ruleEngineService.js`
+- `greenhouse-backend/src/rules/greenhouseRuleEngine.js`
+- `greenhouse-backend/src/rules/actuatorRules.js`
+- `greenhouse-backend/src/rules/commandPriority.js`
+- `greenhouse-backend/src/rules/pumpTiming.js`
+- `greenhouse-backend/src/jobs/`
+- `greenhouse-backend/simulator/sensor_simulator.py`
+- `greenhouse-backend/database/migrations/002_add_fog_heater_category.sql`
+- `greenhouse-backend/database/migrations/003_add_failsafe_mode.sql`
+- Các file kiểm thử liên quan trong `greenhouse-backend/tests/`
+
+### 7. Kết luận
+
+Phase 8 đã hoàn thành. Incident Service hoạt động cùng Rule Engine và Python Sensor Simulator, có khả năng phát hiện các điều kiện môi trường bất thường, tạo cảnh báo theo mức độ ưu tiên, hạn chế cảnh báo trùng và tự động đóng Incident khi điều kiện trở lại bình thường.
+
+**Trạng thái cuối: COMPLETED – Đã kiểm thử các chức năng chính và khôi phục dữ liệu mô phỏng về trạng thái bình thường.**
+
+
 ### Pending
-- Python sensor simulator.
-- Automated Rule Engine.
-- Automatic pump shutdown and 15-minute cooldown.
 - Online deployment.
 - Add telemetry history and alerts.
 - Improve Dashboard and charts.
