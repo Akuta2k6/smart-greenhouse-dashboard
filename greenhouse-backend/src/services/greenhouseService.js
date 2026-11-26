@@ -77,7 +77,8 @@ const controlActuator = async (payload) => {
   const hardwareCategoryMap = {
     IRRIGATION_PUMP: 'PUMP',
     VENTILATION_FAN: 'FAN',
-    SHADE_NET: 'SHADE_NET'
+    SHADE_NET: 'SHADE_NET',
+    FOG_HEATER: 'FOG_HEATER'
   };
 
   const hardwareCategory = hardwareCategoryMap[actuatorType];
@@ -138,7 +139,7 @@ const controlActuator = async (payload) => {
         action,
         durationSeconds,
         'MANUAL_OVERRIDE',
-        'EXECUTING'
+        'COMPLETED'
       ]
     );
 
@@ -163,7 +164,7 @@ const controlActuator = async (payload) => {
         actuatorType,
         action,
         actuatorStatus,
-        status: 'EXECUTING',
+        status: 'COMPLETED',
         executedAt: new Date().toISOString()
       }
     };
@@ -175,7 +176,124 @@ const controlActuator = async (payload) => {
   }
 };
 
+const restoreActuatorStates = async () => {
+  const hardwareCategoryMap = {
+    PUMP: 'IRRIGATION_PUMP',
+    FAN: 'VENTILATION_FAN',
+    SHADE_NET: 'SHADE_NET',
+    FOG_HEATER: 'FOG_HEATER'
+  };
+
+  const defaultStates = {
+    IRRIGATION_PUMP: 'OFF',
+    VENTILATION_FAN: 'OFF',
+    SHADE_NET: 'CLOSED',
+    FOG_HEATER: 'OFF'
+  };
+
+  const query = `
+    SELECT DISTINCT ON (d.id)
+      z.zone_code,
+      d.hardware_category,
+      ac.action
+    FROM devices d
+    JOIN zones z ON z.id = d.zone_id
+    JOIN actuator_commands ac ON ac.device_id = d.id
+    WHERE d.device_type = 'ACTUATOR_RELAY'
+      AND d.status = 'ACTIVE'
+      AND ac.execution_status = 'COMPLETED'
+    ORDER BY d.id, ac.created_at DESC, ac.id DESC
+  `;
+
+  const { rows } = await pool.query(query);
+
+  for (const zone of Object.values(systemState.zones)) {
+    zone.actuatorsState = { ...defaultStates };
+  }
+
+  for (const row of rows) {
+    const actuatorType = hardwareCategoryMap[row.hardware_category];
+    const zone = systemState.zones[row.zone_code];
+
+    if (!actuatorType || !zone) {
+      continue;
+    }
+
+    if (row.action === 'TURN_ON') {
+      zone.actuatorsState[actuatorType] =
+        actuatorType === 'SHADE_NET' ? 'OPEN' : 'ON';
+    } else if (row.action === 'TURN_OFF') {
+      zone.actuatorsState[actuatorType] =
+        actuatorType === 'SHADE_NET' ? 'CLOSED' : 'OFF';
+    }
+  }
+
+  return rows.length;
+};
+
+
+const getManualOverrideStatus = async (zoneId, actuatorType) => {
+  const hardwareCategoryMap = {
+    IRRIGATION_PUMP: 'PUMP',
+    VENTILATION_FAN: 'FAN',
+    SHADE_NET: 'SHADE_NET',
+    FOG_HEATER: 'FOG_HEATER'
+  };
+
+  const hardwareCategory = hardwareCategoryMap[actuatorType];
+
+  if (!hardwareCategory) {
+    throw new Error(`Thiết bị không được hỗ trợ: ${actuatorType}`);
+  }
+
+  const query = `
+    SELECT
+      latest.mode,
+      latest.created_at,
+      (
+        latest.mode = 'MANUAL_OVERRIDE'
+        AND latest.created_at > NOW() - INTERVAL '15 minutes'
+      ) AS is_active
+    FROM devices d
+    JOIN zones z ON z.id = d.zone_id
+    LEFT JOIN LATERAL (
+      SELECT
+        mode,
+        created_at
+      FROM actuator_commands
+      WHERE device_id = d.id
+        AND execution_status = 'COMPLETED'
+      ORDER BY created_at DESC, id DESC
+      LIMIT 1
+    ) latest ON TRUE
+    WHERE z.zone_code = $1
+      AND d.hardware_category = $2
+      AND d.device_type = 'ACTUATOR_RELAY'
+      AND d.status = 'ACTIVE'
+    LIMIT 1
+  `;
+
+  const { rows } = await pool.query(query, [
+    zoneId,
+    hardwareCategory
+  ]);
+
+  if (rows.length === 0) {
+    throw new Error(
+      `Không tìm thấy thiết bị ${actuatorType} tại ${zoneId}.`
+    );
+  }
+
+  return {
+    active: rows[0].is_active === true,
+    mode: rows[0].mode || null,
+    createdAt: rows[0].created_at || null
+  };
+};
+
 module.exports = {
   getLatestTelemetry,
-  controlActuator
+  controlActuator,
+  restoreActuatorStates,
+  getManualOverrideStatus
 };

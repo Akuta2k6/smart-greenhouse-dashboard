@@ -17,7 +17,8 @@ const systemState = {
       actuatorsState: {
         IRRIGATION_PUMP: 'OFF',
         VENTILATION_FAN: 'ON',
-        SHADE_NET: 'CLOSED'
+        SHADE_NET: 'CLOSED',
+        FOG_HEATER: 'OFF'
       }
     },
     'ZONE-STRAWBERRY-02': {
@@ -35,7 +36,8 @@ const systemState = {
       actuatorsState: {
         IRRIGATION_PUMP: 'OFF',
         VENTILATION_FAN: 'ON',
-        SHADE_NET: 'OPEN'
+        SHADE_NET: 'OPEN',
+        FOG_HEATER: 'OFF'
       }
     },
     'ZONE-STRAWBERRY-03': {
@@ -53,7 +55,8 @@ const systemState = {
       actuatorsState: {
         IRRIGATION_PUMP: 'OFF',
         VENTILATION_FAN: 'OFF',
-        SHADE_NET: 'CLOSED'
+        SHADE_NET: 'CLOSED',
+        FOG_HEATER: 'OFF'
       }
     }
   }

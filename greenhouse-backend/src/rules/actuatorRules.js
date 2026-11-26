@@ -4,7 +4,8 @@ const ALLOWED_ACTIONS = ['TURN_ON', 'TURN_OFF'];
 const ALLOWED_ACTUATORS = [
   'IRRIGATION_PUMP',
   'VENTILATION_FAN',
-  'SHADE_NET'
+  'SHADE_NET',
+  'FOG_HEATER'
 ];
 
 const validateActuatorCommand = (systemState, payload) => {

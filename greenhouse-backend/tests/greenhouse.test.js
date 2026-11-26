@@ -182,7 +182,8 @@ test('Máy bơm được lưu vào PostgreSQL với thời gian tưới tối đ
     assert.equal(rows[0].actuator_type, 'IRRIGATION_PUMP');
     assert.equal(rows[0].action, 'TURN_ON');
     assert.equal(rows[0].duration_seconds, 120);
-    assert.equal(rows[0].execution_status, 'EXECUTING');
+    assert.equal(rows[0].execution_status, 'COMPLETED');
+
   } finally {
     if (commandId) {
       await pool.query(

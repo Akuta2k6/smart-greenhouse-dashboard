@@ -11,7 +11,7 @@ SENSOR_STATES = {
         "ph_value": 6.05
     },
     "SNS-ZONE-02": {
-        "temperature": 29.2,
+        "temperature": 23.2,
         "air_humidity": 52.0,
         "soil_humidity": 55.0,
         "light_lux": 31000.0,
@@ -19,7 +19,7 @@ SENSOR_STATES = {
         "ph_value": 5.40
     },
     "SNS-ZONE-03": {
-        "temperature": 21.8,
+        "temperature": 23.8,
         "air_humidity": 71.0,
         "soil_humidity": 78.0,
         "light_lux": 19000.0,
@@ -28,7 +28,7 @@ SENSOR_STATES = {
     }
 }
 
-WATER_TANK_LEVEL = 12.0
+WATER_TANK_LEVEL = 80.0
 
 SENSOR_LIMITS = {
     "temperature": (10.0, 45.0),
