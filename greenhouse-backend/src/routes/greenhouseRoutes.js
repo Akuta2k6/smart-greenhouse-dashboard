@@ -11,6 +11,10 @@ const {
   getZoneActuatorsHandler
 } = require('../controllers/actuatorController');
 
+const {
+  getIncidentsHandler
+} = require('../controllers/incidentController');
+
 router.get(
   '/greenhouse/zones/:zoneId/telemetry/latest',
   getTelemetryLatest
@@ -24,6 +28,11 @@ router.get(
 router.post(
   '/greenhouse/actuators/control',
   controlActuatorHandler
+);
+
+router.get(
+  '/greenhouse/incidents',
+  getIncidentsHandler
 );
 
 module.exports = router;

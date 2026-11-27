@@ -1,11 +1,12 @@
 
+import argparse
 import time
 from datetime import datetime, timezone
 
 import psycopg
 
 from config import DATABASE_CONFIG, SIMULATION_INTERVAL
-from sensor_simulator import generate_readings
+from sensor_simulator import generate_readings, set_scenario, SCENARIOS
 
 DEVICE_CODES = [
     "SNS-ZONE-01",
@@ -27,7 +28,6 @@ INSERT_TELEMETRY_SQL = """
     )
     VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
 """
-
 
 def load_sensor_devices(connection):
     rows = connection.execute(
@@ -55,8 +55,6 @@ def load_sensor_devices(connection):
 
     return devices
 
-
-
 def save_telemetry(connection, devices):
     readings = generate_readings()
     recorded_at = datetime.now(timezone.utc)
@@ -82,9 +80,17 @@ def save_telemetry(connection, devices):
 
     return len(records)
 
-
-
 def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--scenario",
+        choices=list(SCENARIOS.keys()),
+        default="normal"
+    )
+    args = parser.parse_args()
+
+    set_scenario(args.scenario)
+
     connection = psycopg.connect(
         **DATABASE_CONFIG,
         row_factory=psycopg.rows.dict_row,
@@ -95,6 +101,7 @@ def main():
         devices = load_sensor_devices(connection)
 
         print("Sensor Simulator started")
+        print(f"Scenario: {args.scenario}")
         print(f"Connected devices: {len(devices)}")
         print(f"Simulation interval: {SIMULATION_INTERVAL} seconds")
 
@@ -129,7 +136,6 @@ def main():
 
     finally:
         connection.close()
-
 
 if __name__ == "__main__":
     main()

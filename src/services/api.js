@@ -32,6 +32,13 @@ export const getZoneActuators = async (zoneId) => {
   return response.data;
 };
 
+export const getIncidents = async (zoneId = null) => {
+  const response = await api.get('/greenhouse/incidents', {
+    params: zoneId ? { zoneId } : {}
+  });
+  return response.data;
+};
+
 export const controlActuator = async (payload) => {
   const response = await api.post('/greenhouse/actuators/control', payload);
   return response.data;

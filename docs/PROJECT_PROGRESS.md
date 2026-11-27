@@ -196,6 +196,100 @@ Status: Initial implementation completed.
 - Test abnormal environmental scenarios.
 
 
+## Phase 10 – Incident Management API
+
+### 1. Objectives
+
+Develop an API for managing greenhouse incidents and integrating incident data from the PostgreSQL database with the frontend dashboard.
+
+### 2. Implementation
+
+- Created the Incident Service to retrieve incident records from PostgreSQL.
+- Implemented the Incident Controller to handle incident-related requests.
+- Added the API endpoint:
+  - `GET /api/v1/greenhouse/incidents`
+- Supported retrieving the latest 100 incidents.
+- Supported filtering incidents by `zoneId`.
+- Integrated the `getIncidents()` function into the frontend API service (`src/services/api.js`).
+
+### 3. Validation
+
+- Verified that the backend can retrieve incident records from PostgreSQL.
+- Verified that the API supports retrieving incidents and filtering them by zone.
+- Confirmed that the backend can synchronize incident statuses when environmental conditions return to normal.
+
+### 4. Status
+
+- [x] Incident Service implemented.
+- [x] Incident Controller implemented.
+- [x] Incident API route implemented.
+- [x] API retrieval and filtering implemented.
+- [ ] Frontend incident interface integration verified.
+
+
+## Phase 11 – Simulator Scenarios and Automation Testing
+
+### 1. Objectives
+
+Extend the Python Simulator to support predefined environmental scenarios and test the automatic greenhouse control rules under different conditions.
+
+### 2. Implementation
+
+Updated the Simulator files:
+
+- `greenhouse-backend/simulator/main.py`
+- `greenhouse-backend/simulator/sensor_simulator.py`
+
+Implemented command-line scenario selection using the `--scenario` argument.
+
+Supported scenarios:
+
+| Scenario | Description |
+|---|---|
+| `normal` | Normal greenhouse environmental conditions |
+| `high-temperature` | Simulates high temperature in Zone 01 (32°C) |
+| `high-humidity` | Simulates high air humidity in Zone 01 (85%) |
+| `low-humidity` | Simulates low air humidity in Zone 01 (40%) |
+| `low-water-tank` | Simulates a low shared water tank level (10%) |
+| `low-soil-moisture` | Simulates low soil moisture in Zone 01 (50%) |
+| `soil-moisture-recovered` | Simulates soil moisture recovery in Zone 01 (80%) |
+
+The Simulator sends telemetry data for three greenhouse zones every 5 seconds.
+
+### 3. Automation Testing
+
+Tested the following automatic control behaviors:
+
+- **High temperature:** The system creates a critical incident, activates the cooling fan, and opens the shade system.
+- **Normal temperature:** The system resolves the related incident and restores the fan and shade states.
+- **High air humidity:** The system creates a HIGH-priority incident and activates the fan.
+- **Low air humidity:** The system creates a HIGH-priority incident.
+- **Low water tank level:** The system creates a CRITICAL incident for all three zones and activates the pump failsafe protection when necessary.
+- **Low soil moisture:** The irrigation pump automatically starts when soil moisture is below 60% and the water tank level is above 15%.
+- **Pump maximum runtime:** The system automatically stops the irrigation pump after 120 seconds of operation using FAILSAFE mode.
+- **Pump cooldown:** The system prevents automatic pump restart during the 15-minute cooldown period.
+
+### 4. Validation
+
+- Successfully executed all predefined Simulator scenarios.
+- Verified telemetry updates in PostgreSQL.
+- Verified automatic actuator commands and execution statuses in the `actuator_commands` table.
+- Verified incident creation and resolution through the backend logs and database.
+- Confirmed that Python Simulator files pass syntax validation using `py_compile`.
+
+### 5. Status
+
+- [x] Added predefined Simulator scenarios.
+- [x] Added command-line scenario selection.
+- [x] Implemented telemetry simulation for three zones.
+- [x] Tested temperature and humidity automation.
+- [x] Tested low water tank protection.
+- [x] Tested automatic irrigation startup.
+- [x] Tested maximum pump runtime protection.
+- [x] Tested pump cooldown.
+- [ ] Independently verified early irrigation stop when soil moisture reaches 80% in AUTO mode.
+
+
 ### Pending
 - Add telemetry history and alerts.
 - Improve Dashboard and charts.

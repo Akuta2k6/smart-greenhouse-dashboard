@@ -80,25 +80,7 @@ const runRuleEngine = async () => {
         });
       }
 
-      let pumpStoppedThisCycle = false;
       const pumpTiming = await getPumpTimingStatus(zoneId);
-
-      if (
-        systemState.zones[zoneId].actuatorsState.IRRIGATION_PUMP === 'ON' &&
-        pumpTiming.isRunning &&
-        pumpTiming.runtimeExpired
-      ) {
-        const command = await executeActuatorCommand({
-          zoneId,
-          actuatorType: 'IRRIGATION_PUMP',
-          action: 'TURN_OFF',
-          mode: 'FAILSAFE',
-          reason: 'Máy bơm đã chạy đủ thời gian tối đa 120 giây.'
-        });
-
-        summary.executedCommands.push(command);
-        pumpStoppedThisCycle = true;
-      }
 
       const decisions = evaluateZoneRules(
         telemetry,
@@ -112,11 +94,12 @@ const runRuleEngine = async () => {
             decision.action === 'TURN_ON' &&
             decision.mode === 'AUTO'
           ) {
-            const timingStatus = pumpStoppedThisCycle
-              ? { cooldownActive: true }
-              : await getPumpTimingStatus(zoneId);
+            const timingStatus = await getPumpTimingStatus(zoneId);
 
-            if (shouldBlockPumpStart(timingStatus.cooldownActive, decision.mode)) {
+            if (shouldBlockPumpStart(
+              timingStatus.cooldownActive,
+              decision.mode
+            )) {
               summary.skippedCommands.push({
                 zoneId,
                 ...decision,
@@ -154,6 +137,30 @@ const runRuleEngine = async () => {
           summary.errors.push({
             zoneId,
             actuatorType: decision.actuatorType,
+            message: error.message
+          });
+        }
+      }
+
+      if (
+        systemState.zones[zoneId].actuatorsState.IRRIGATION_PUMP === 'ON' &&
+        pumpTiming.isRunning &&
+        pumpTiming.runtimeExpired
+      ) {
+        try {
+          const command = await executeActuatorCommand({
+            zoneId,
+            actuatorType: 'IRRIGATION_PUMP',
+            action: 'TURN_OFF',
+            mode: 'FAILSAFE',
+            reason: 'Máy bơm đã chạy đủ thời gian tối đa 120 giây.'
+          });
+
+          summary.executedCommands.push(command);
+        } catch (error) {
+          summary.errors.push({
+            zoneId,
+            actuatorType: 'IRRIGATION_PUMP',
             message: error.message
           });
         }

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import apiClient, { getTelemetryLatest, getZoneActuators } from './services/api';
+import apiClient, { getTelemetryLatest, getZoneActuators, getIncidents } from './services/api';
 import GreenhouseMap from './components/GreenhouseMap';
 import { 
   Thermometer, 
@@ -70,19 +70,74 @@ export default function App() {
   const [actuatorLoading, setActuatorLoading] = useState(false);
   const [actuatorBusy, setActuatorBusy] = useState({});
 
-  // Nhật ký sự cố và mã lỗi chi tiết[cite: 5]
-  const [incidents, setIncidents] = useState([
-    { id: 1, code: 'ERR_WATER_TANK_DEPLETED', title: 'Mức nước bồn chứa thấp nguy hiểm', zone: 'Hệ thống chung', time: '5 phút trước', severity: 'CRITICAL', status: 'Active', message: 'Mức nước hiện tại 12.0% (< 15%). Rơ-le bơm tưới đã bị khóa tự động để bảo vệ phần cứng.' },
-    { id: 2, code: 'ERR_HIGH_TEMP_WARNING', title: 'Cảnh báo nhiệt độ vượt ngưỡng', zone: 'Khu 2', time: '25 phút trước', severity: 'WARNING', message: 'Nhiệt độ Khu 2 đạt 29.2°C. Quạt thông gió đã được kích hoạt tăng cường công suất.' },
-    { id: 3, code: 'INFO_CYCLE_COMPLETE', title: 'Hoàn thành chu kỳ tưới dinh dưỡng', zone: 'Khu 1', time: '1 giờ trước', message: 'Hệ thống đã tự động cấp nước và dung dịch EC 1.4 mS/cm trong 10 phút.' },
-    { id: 4, code: 'ERR_SENSOR_TIMEOUT', title: 'Mất kết nối tạm thời cảm biến pH', zone: 'Khu 3', time: '3 giờ trước', message: 'Cảm biến phản hồi chậm > 3000ms. Đã tự động khởi động lại giao thức I2C thành công.' }
-  ]);
+  const [incidents, setIncidents] = useState([]);
+  const [incidentLoading, setIncidentLoading] = useState(false);
+  const [incidentError, setIncidentError] = useState('');
+  const [incidentZoneFilter, setIncidentZoneFilter] = useState('');
 
   const zoneIds = [
     'ZONE-STRAWBERRY-01',
     'ZONE-STRAWBERRY-02',
     'ZONE-STRAWBERRY-03'
   ];
+
+  useEffect(() => {
+    let cancelled = false;
+    let timeoutId;
+    let firstLoad = true;
+
+    const fetchIncidents = async () => {
+      if (firstLoad) setIncidentLoading(true);
+
+      try {
+        const response = await getIncidents(incidentZoneFilter || null);
+        if (cancelled) return;
+
+        if (!response?.success || !Array.isArray(response.data?.incidents)) {
+          throw new Error('Dữ liệu sự cố từ Backend không đúng định dạng.');
+        }
+
+        setIncidents(response.data.incidents);
+        setIncidentError('');
+      } catch (error) {
+        if (!cancelled) {
+          setIncidentError(error.response?.data?.message || error.message || 'Không thể tải danh sách sự cố.');
+        }
+      } finally {
+        if (firstLoad) {
+          setIncidentLoading(false);
+          firstLoad = false;
+        }
+        if (!cancelled) timeoutId = setTimeout(fetchIncidents, 5000);
+      }
+    };
+
+    fetchIncidents();
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timeoutId);
+    };
+  }, [incidentZoneFilter]);
+
+  const formatIncidentDate = (value) => {
+    if (!value) return '--';
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? '--' : date.toLocaleString('vi-VN');
+  };
+
+  const getIncidentPriority = (priority) => ({
+    LOW: 'Thấp',
+    MEDIUM: 'Trung bình',
+    HIGH: 'Cao',
+    CRITICAL: 'Nghiêm trọng'
+  }[priority] || priority || 'Không xác định');
+
+  const getIncidentStatus = (status) => ({
+    OPEN: 'Đang mở',
+    IN_PROGRESS: 'Đang xử lý',
+    RESOLVED: 'Đã giải quyết'
+  }[status] || status || 'Không xác định');
 
   const refreshZoneActuators = async (zoneId) => {
     const response = await getZoneActuators(zoneId);
@@ -617,47 +672,97 @@ export default function App() {
           {activeTab === 'incidents' && (
             <div className="space-y-6">
               <div className="bg-slate-900 border border-slate-800 p-6 rounded-2xl shadow-xl">
-                <div className="flex items-center justify-between mb-6">
+                <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
                   <div>
-                    <h3 className="text-lg font-bold text-white">Nhật ký Sự cố & Mã lỗi Hệ thống (Incident & Error Log)</h3>
-                    <p className="text-xs text-slate-400">Lịch sử ghi nhận các ngoại lệ phần cứng, cảnh báo cảm biến và cơ chế kích hoạt Failsafe.</p>
+                    <h3 className="text-lg font-bold text-white">Nhật ký Sự cố từ PostgreSQL</h3>
+                    <p className="text-xs text-slate-400">Dữ liệu được đồng bộ tự động từ Rule Engine, cập nhật mỗi 5 giây.</p>
                   </div>
-                  <button 
-                    onClick={() => setIncidents([])}
-                    className="bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs text-slate-300 px-3 py-2 rounded-xl transition"
-                  >
-                    Xóa nhật ký
-                  </button>
+                  <div className="flex items-center gap-3">
+                    <label htmlFor="incident-zone-filter" className="text-xs text-slate-400">Lọc khu vực</label>
+                    <select
+                      id="incident-zone-filter"
+                      value={incidentZoneFilter}
+                      onChange={(event) => setIncidentZoneFilter(event.target.value)}
+                      className="bg-slate-800 border border-slate-700 text-sm rounded-xl px-3 py-2 text-slate-200"
+                    >
+                      <option value="">Tất cả khu vực</option>
+                      {zoneIds.map((zoneId) => (
+                        <option key={zoneId} value={zoneId}>{zonesData[zoneId]?.name || zoneId}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
+                  {[
+                    { key: 'OPEN', label: 'Đang mở', style: 'text-rose-300' },
+                    { key: 'IN_PROGRESS', label: 'Đang xử lý', style: 'text-amber-300' },
+                    { key: 'RESOLVED', label: 'Đã giải quyết', style: 'text-emerald-300' },
+                    { key: 'TOTAL', label: 'Tổng sự cố', style: 'text-slate-100' }
+                  ].map((item) => (
+                    <div key={item.key} className="bg-slate-800/60 border border-slate-700/60 rounded-xl p-4">
+                      <p className="text-xs text-slate-400">{item.label}</p>
+                      <p className={`text-2xl font-bold mt-1 ${item.style}`}>
+                        {item.key === 'TOTAL' ? incidents.length : incidents.filter((incident) => incident.status === item.key).length}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+
+                {incidentError && (
+                  <div className="mb-4 rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-300">
+                    {incidentError} Dữ liệu đang hiển thị có thể chưa phải bản cập nhật mới nhất.
+                  </div>
+                )}
+
+                <div className="flex items-center justify-between mb-4">
+                  <p className="text-xs text-slate-400">{incidentLoading ? 'Đang tải dữ liệu...' : `${incidents.length} sự cố được tìm thấy`}</p>
+                  <span className="text-[10px] text-slate-500">Tối đa 100 bản ghi mới nhất</span>
                 </div>
 
                 <div className="space-y-4">
                   {incidents.length === 0 ? (
-                    <div className="text-center py-12 text-slate-500 text-sm">Không có sự cố hoặc mã lỗi nào được ghi nhận.</div>
+                    <div className="text-center py-12 text-slate-500 text-sm">
+                      {incidentLoading ? 'Đang tải nhật ký sự cố...' : 'Không có sự cố nào được ghi nhận trong bộ lọc này.'}
+                    </div>
                   ) : (
-                    incidents.map((incident) => (
-                      <div key={incident.id} className="bg-slate-800/40 border border-slate-700/60 p-5 rounded-xl flex flex-col md:flex-row md:items-center justify-between gap-4">
-                        <div className="flex items-start space-x-4">
-                          <div className={`p-3 rounded-xl mt-0.5 ${incident.severity === 'CRITICAL' ? 'bg-rose-500/10 text-rose-400 border border-rose-500/20' : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'}`}>
-                            {incident.severity === 'CRITICAL' ? <AlertOctagon className="w-5 h-5" /> : <AlertTriangle className="w-5 h-5" />}
-                          </div>
-                          <div>
-                            <div className="flex items-center space-x-2 flex-wrap">
-                              <span className="text-xs font-mono font-bold bg-slate-800 text-slate-200 px-2 py-0.5 rounded border border-slate-700">{incident.code}</span>
-                              <h4 className="text-sm font-bold text-white">{incident.title}</h4>
-                              <span className="text-[10px] bg-slate-800 text-slate-400 px-2 py-0.5 rounded">[{incident.zone}]</span>
-                            </div>
-                            <p className="text-xs text-slate-300 mt-1.5">{incident.message}</p>
-                          </div>
-                        </div>
+                    incidents.map((incident) => {
+                      const priorityStyle = incident.priority === 'CRITICAL'
+                        ? 'bg-rose-500/10 text-rose-300 border-rose-500/30'
+                        : incident.priority === 'HIGH'
+                          ? 'bg-amber-500/10 text-amber-300 border-amber-500/30'
+                          : incident.priority === 'MEDIUM'
+                            ? 'bg-yellow-500/10 text-yellow-300 border-yellow-500/30'
+                            : 'bg-slate-700/60 text-slate-300 border-slate-600';
+                      const statusStyle = incident.status === 'RESOLVED'
+                        ? 'bg-emerald-500/15 text-emerald-300'
+                        : incident.status === 'IN_PROGRESS'
+                          ? 'bg-amber-500/15 text-amber-300'
+                          : 'bg-rose-500/15 text-rose-300';
 
-                        <div className="flex items-center justify-between md:flex-col md:items-end space-y-1 text-xs border-t md:border-t-0 pt-2 md:pt-0 border-slate-800">
-                          <span className="text-slate-400">{incident.time}</span>
-                          <span className={`font-bold px-2 py-0.5 rounded-full text-[10px] ${incident.status === 'Active' ? 'bg-rose-500/20 text-rose-400' : 'bg-emerald-500/20 text-emerald-400'}`}>
-                            {incident.status}
-                          </span>
+                      return (
+                        <div key={incident.id} className="bg-slate-800/40 border border-slate-700/60 p-5 rounded-xl flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                          <div className="flex items-start gap-4 min-w-0">
+                            <div className={`p-3 rounded-xl mt-0.5 border ${priorityStyle}`}>
+                              {incident.priority === 'CRITICAL' ? <AlertOctagon className="w-5 h-5" /> : <AlertTriangle className="w-5 h-5" />}
+                            </div>
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className={`text-[10px] font-bold px-2 py-1 rounded border ${priorityStyle}`}>{getIncidentPriority(incident.priority)}</span>
+                                <h4 className="text-sm font-bold text-white">{incident.description}</h4>
+                                <span className="text-[10px] bg-slate-800 text-slate-400 px-2 py-1 rounded">[{incident.zone_code || 'Không rõ khu vực'}]</span>
+                              </div>
+                              <p className="text-xs text-slate-400 mt-2">Mã sự cố: #{incident.id}</p>
+                              {incident.image_url && <a href={incident.image_url} target="_blank" rel="noreferrer" className="text-xs text-sky-400 mt-2 inline-block">Xem hình ảnh đính kèm</a>}
+                            </div>
+                          </div>
+                          <div className="flex items-center justify-between md:flex-col md:items-end gap-2 text-xs border-t md:border-t-0 pt-3 md:pt-0 border-slate-800 shrink-0">
+                            <span className="text-slate-400">{formatIncidentDate(incident.created_at)}</span>
+                            <span className={`font-bold px-2 py-1 rounded-full text-[10px] ${statusStyle}`}>{getIncidentStatus(incident.status)}</span>
+                          </div>
                         </div>
-                      </div>
-                    ))
+                      );
+                    })
                   )}
                 </div>
               </div>

@@ -171,8 +171,32 @@ const syncZoneIncidents = async (zoneId, metrics) => {
   }
 };
 
+const getIncidents = async (zoneId = null) => {
+  const result = await pool.query(
+    `
+      SELECT
+        i.id,
+        i.zone_id,
+        z.zone_code,
+        i.description,
+        i.image_url,
+        i.priority,
+        i.status,
+        i.created_at
+      FROM incidents i
+      INNER JOIN zones z ON z.id = i.zone_id
+      WHERE ($1::VARCHAR IS NULL OR z.zone_code = $1)
+      ORDER BY i.created_at DESC, i.id DESC
+      LIMIT 100
+    `,
+    [zoneId]
+  );
+
+  return result.rows;
+};
 
 module.exports = {
   INCIDENT_RULES,
-  syncZoneIncidents
+  syncZoneIncidents,
+  getIncidents
 };
