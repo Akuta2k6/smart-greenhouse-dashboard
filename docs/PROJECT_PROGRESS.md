@@ -166,11 +166,39 @@ Phase 8 đã hoàn thành. Incident Service hoạt động cùng Rule Engine và
 **Trạng thái cuối: COMPLETED – Đã kiểm thử các chức năng chính và khôi phục dữ liệu mô phỏng về trạng thái bình thường.**
 
 
+
+## Phase 9 – 2D Greenhouse Model
+
+Status: Initial implementation completed.
+
+### Files changed
+- `src/components/GreenhouseMap.jsx` – New interactive 2D greenhouse SVG model.
+- `src/App.jsx` – Integrated GreenhouseMap into Zones tab.
+
+### Implemented
+- Top-down greenhouse layout with three strawberry growing zones.
+- Strawberry growing beds, sensor icons, actuator labels and central water tank.
+- Zone status colors: OPTIMAL, WARNING, CRITICAL.
+- Displays live temperature and soil humidity from zonesData.
+- Displays water tank level from API telemetry.
+- Clicking a zone updates selectedZone in the main Dashboard.
+
+### Validation
+- `npm run build`: PASSED.
+- Vite production build completed successfully.
+- 2D model rendered successfully in browser.
+- Live zone telemetry and water tank level displayed.
+
+### Remaining
+- Connect actual actuator states to the 2D model.
+- Connect incidents and alert status to each zone.
+- Improve device status visualization.
+- Test abnormal environmental scenarios.
+
+
 ### Pending
-- Online deployment.
 - Add telemetry history and alerts.
 - Improve Dashboard and charts.
-- Build interactive 2D greenhouse model.
 - Perform end-to-end testing.
 
 ## Git Milestones

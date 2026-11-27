@@ -43,6 +43,10 @@ const getLatestTelemetry = async (zoneId) => {
   const row = rows[0];
   const toNumber = (value) => value === null ? null : Number(value);
 
+  if (row.water_tank_level !== null) {
+    systemState.waterTankLevel = Number(row.water_tank_level);
+  }
+
   return {
     zoneId: row.zone_code,
     zoneName: row.zone_name,
@@ -78,7 +82,8 @@ const controlActuator = async (payload) => {
     IRRIGATION_PUMP: 'PUMP',
     VENTILATION_FAN: 'FAN',
     SHADE_NET: 'SHADE_NET',
-    FOG_HEATER: 'FOG_HEATER'
+    FOG_HEATER: 'FOG_HEATER',
+    NUTRIENT_VALVE: 'NUTRIENT_VALVE'
   };
 
   const hardwareCategory = hardwareCategoryMap[actuatorType];
@@ -181,14 +186,16 @@ const restoreActuatorStates = async () => {
     PUMP: 'IRRIGATION_PUMP',
     FAN: 'VENTILATION_FAN',
     SHADE_NET: 'SHADE_NET',
-    FOG_HEATER: 'FOG_HEATER'
+    FOG_HEATER: 'FOG_HEATER',
+    NUTRIENT_VALVE: 'NUTRIENT_VALVE'
   };
 
   const defaultStates = {
     IRRIGATION_PUMP: 'OFF',
     VENTILATION_FAN: 'OFF',
     SHADE_NET: 'CLOSED',
-    FOG_HEATER: 'OFF'
+    FOG_HEATER: 'OFF',
+    NUTRIENT_VALVE: 'OFF'
   };
 
   const query = `
@@ -237,7 +244,8 @@ const getManualOverrideStatus = async (zoneId, actuatorType) => {
     IRRIGATION_PUMP: 'PUMP',
     VENTILATION_FAN: 'FAN',
     SHADE_NET: 'SHADE_NET',
-    FOG_HEATER: 'FOG_HEATER'
+    FOG_HEATER: 'FOG_HEATER',
+    NUTRIENT_VALVE: 'NUTRIENT_VALVE'
   };
 
   const hardwareCategory = hardwareCategoryMap[actuatorType];
@@ -291,9 +299,67 @@ const getManualOverrideStatus = async (zoneId, actuatorType) => {
   };
 };
 
+
+const getZoneActuators = async (zoneId) => {
+  const hardwareCategoryMap = {
+    PUMP: 'IRRIGATION_PUMP',
+    FAN: 'VENTILATION_FAN',
+    SHADE_NET: 'SHADE_NET',
+    FOG_HEATER: 'FOG_HEATER',
+    NUTRIENT_VALVE: 'NUTRIENT_VALVE'
+  };
+
+  const query = `
+    SELECT
+      d.hardware_category,
+      d.status AS device_status,
+      latest.action,
+      latest.mode,
+      latest.created_at
+    FROM devices d
+    JOIN zones z ON z.id = d.zone_id
+    LEFT JOIN LATERAL (
+      SELECT action, mode, created_at
+      FROM actuator_commands
+      WHERE device_id = d.id
+        AND execution_status = 'COMPLETED'
+      ORDER BY created_at DESC, id DESC
+      LIMIT 1
+    ) latest ON TRUE
+    WHERE z.zone_code = $1
+      AND d.device_type = 'ACTUATOR_RELAY'
+    ORDER BY d.hardware_category
+  `;
+
+  const { rows } = await pool.query(query, [zoneId]);
+
+  return rows.map((row) => {
+    const actuatorType = hardwareCategoryMap[row.hardware_category];
+
+    let actuatorStatus = 'UNKNOWN';
+
+    if (row.action === 'TURN_ON') {
+      actuatorStatus = actuatorType === 'SHADE_NET' ? 'OPEN' : 'ON';
+    } else if (row.action === 'TURN_OFF') {
+      actuatorStatus = actuatorType === 'SHADE_NET' ? 'CLOSED' : 'OFF';
+    }
+
+    return {
+      actuatorType,
+      hardwareCategory: row.hardware_category,
+      status: actuatorStatus,
+      deviceStatus: row.device_status,
+      mode: row.mode || null,
+      updatedAt: row.created_at || null
+    };
+  }).filter((item) => item.actuatorType);
+};
+
+
 module.exports = {
   getLatestTelemetry,
   controlActuator,
   restoreActuatorStates,
-  getManualOverrideStatus
+  getManualOverrideStatus,
+  getZoneActuators
 };

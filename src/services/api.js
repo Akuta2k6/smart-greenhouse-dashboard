@@ -27,6 +27,11 @@ export const getTelemetryLatest = async (zoneId) => {
   return response.data;
 };
 
+export const getZoneActuators = async (zoneId) => {
+  const response = await api.get(`/greenhouse/zones/${zoneId}/actuators`);
+  return response.data;
+};
+
 export const controlActuator = async (payload) => {
   const response = await api.post('/greenhouse/actuators/control', payload);
   return response.data;

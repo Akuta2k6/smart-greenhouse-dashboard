@@ -7,12 +7,18 @@ const {
 } = require('../controllers/telemetryController');
 
 const {
-  controlActuatorHandler
+  controlActuatorHandler,
+  getZoneActuatorsHandler
 } = require('../controllers/actuatorController');
 
 router.get(
   '/greenhouse/zones/:zoneId/telemetry/latest',
   getTelemetryLatest
+);
+
+router.get(
+  '/greenhouse/zones/:zoneId/actuators',
+  getZoneActuatorsHandler
 );
 
 router.post(

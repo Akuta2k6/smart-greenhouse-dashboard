@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import apiClient, { getTelemetryLatest } from './services/api';
+import apiClient, { getTelemetryLatest, getZoneActuators } from './services/api';
+import GreenhouseMap from './components/GreenhouseMap';
 import { 
   Thermometer, 
   Droplet, 
@@ -20,7 +21,7 @@ export default function App() {
   // Ánh xạ sang mã Zone chuẩn theo API Contract (Ví dụ: ZONE-STRAWBERRY-01)
   const [selectedZone, setSelectedZone] = useState('ZONE-STRAWBERRY-01');
   const [isOnline, setIsOnline] = useState(true);
-  const [waterTankLevel, setWaterTankLevel] = useState(12.0); // % Bồn nước
+  const [waterTankLevel, setWaterTankLevel] = useState(null);
   const [loadingApi, setLoadingApi] = useState(false);
 
   // Danh sách các vùng chuẩn theo tài liệu API Contract[cite: 5]
@@ -57,14 +58,17 @@ export default function App() {
     }
   });
 
-  // Trạng thái thiết bị chấp hành (Actuators khớp với API Contract)[cite: 5]
-  const [actuators, setActuators] = useState({
-    IRRIGATION_PUMP: { name: 'Bơm tưới nhỏ giọt', status: false, mode: 'AUTO', pin: 'GPIO 25' },
-    VENTILATION_FAN: { name: 'Quạt thông gió đối lưu', status: true, mode: 'AUTO', pin: 'GPIO 26' },
-    SHADE_NET: { name: 'Lưới che nắng tự động', status: true, mode: 'AUTO', pin: 'GPIO 27' },
-    FOG_HEATER: { name: 'Đèn sưởi sương mù', status: false, mode: 'AUTO', pin: 'GPIO 14' },
-    NUTRIENT_VALVE: { name: 'Van châm phân tự động (EC/pH)', status: false, mode: 'AUTO', pin: 'GPIO 32' }
-  });
+  const actuatorConfig = {
+    IRRIGATION_PUMP: { name: 'Bơm tưới nhỏ giọt', pin: 'GPIO 25' },
+    VENTILATION_FAN: { name: 'Quạt thông gió đối lưu', pin: 'GPIO 26' },
+    SHADE_NET: { name: 'Lưới che nắng tự động', pin: 'GPIO 27' },
+    FOG_HEATER: { name: 'Bộ phun sương / tạo ẩm', pin: 'GPIO 14' },
+    NUTRIENT_VALVE: { name: 'Van châm phân tự động (EC/pH)', pin: 'GPIO 32' }
+  };
+
+  const [actuatorsByZone, setActuatorsByZone] = useState({});
+  const [actuatorLoading, setActuatorLoading] = useState(false);
+  const [actuatorBusy, setActuatorBusy] = useState({});
 
   // Nhật ký sự cố và mã lỗi chi tiết[cite: 5]
   const [incidents, setIncidents] = useState([
@@ -74,28 +78,53 @@ export default function App() {
     { id: 4, code: 'ERR_SENSOR_TIMEOUT', title: 'Mất kết nối tạm thời cảm biến pH', zone: 'Khu 3', time: '3 giờ trước', message: 'Cảm biến phản hồi chậm > 3000ms. Đã tự động khởi động lại giao thức I2C thành công.' }
   ]);
 
-  // 1. GỌI API LẤY TELEMETRY MỚI NHẤT (GET /greenhouse/zones/{zoneId}/telemetry/latest)[cite: 5]
-  useEffect(() => {
-    const zoneIds = [
-      'ZONE-STRAWBERRY-01',
-      'ZONE-STRAWBERRY-02',
-      'ZONE-STRAWBERRY-03'
-    ];
+  const zoneIds = [
+    'ZONE-STRAWBERRY-01',
+    'ZONE-STRAWBERRY-02',
+    'ZONE-STRAWBERRY-03'
+  ];
 
+  const refreshZoneActuators = async (zoneId) => {
+    const response = await getZoneActuators(zoneId);
+    if (!response?.success || !Array.isArray(response.data?.actuators)) {
+      throw new Error(`Không thể lấy trạng thái thiết bị của ${zoneId}.`);
+    }
+
+    const mapped = Object.fromEntries(
+      response.data.actuators.map((item) => [item.actuatorType, item])
+    );
+
+    setActuatorsByZone((prev) => ({
+      ...prev,
+      [zoneId]: mapped
+    }));
+
+    return mapped;
+  };
+
+  useEffect(() => {
     let cancelled = false;
     let timeoutId;
     let firstLoad = true;
 
-    const fetchTelemetry = async () => {
+    const fetchDashboardData = async () => {
       if (firstLoad) {
         setLoadingApi(true);
+        setActuatorLoading(true);
       }
 
       try {
         const results = await Promise.allSettled(
           zoneIds.map(async (zoneId) => {
-            const response = await getTelemetryLatest(zoneId);
-            return { zoneId, response };
+            const [telemetryResult, actuatorResult] = await Promise.allSettled([
+              getTelemetryLatest(zoneId),
+              getZoneActuators(zoneId)
+            ]);
+            return {
+              zoneId,
+              telemetry: telemetryResult.status === 'fulfilled' ? telemetryResult.value : null,
+              actuatorResponse: actuatorResult.status === 'fulfilled' ? actuatorResult.value : null
+            };
           })
         );
 
@@ -103,20 +132,14 @@ export default function App() {
 
         const validUpdates = results.flatMap((result) => {
           if (result.status !== 'fulfilled') return [];
-
-          const { zoneId, response } = result.value;
-
-          if (!response?.success || !response.data?.metrics) {
-            return [];
-          }
-
-          return [{ zoneId, data: response.data }];
+          const { zoneId, telemetry } = result.value;
+          if (!telemetry?.success || !telemetry.data?.metrics) return [];
+          return [{ zoneId, data: telemetry.data }];
         });
 
         if (validUpdates.length > 0) {
           setZonesData((prev) => {
             const updated = { ...prev };
-
             validUpdates.forEach(({ zoneId, data }) => {
               updated[zoneId] = {
                 ...prev[zoneId],
@@ -130,90 +153,132 @@ export default function App() {
                 ph: data.metrics.phValue
               };
             });
-
             return updated;
           });
 
-          setWaterTankLevel(
-            validUpdates[0].data.metrics.waterTankLevel
-          );
+          const tankValue = validUpdates.find(
+            ({ data }) => data.metrics.waterTankLevel !== null && data.metrics.waterTankLevel !== undefined
+          )?.data.metrics.waterTankLevel;
+          setWaterTankLevel(tankValue ?? null);
+        }
+
+        const actuatorUpdates = results.flatMap((result) => {
+          if (result.status !== 'fulfilled') return [];
+          const { zoneId, actuatorResponse } = result.value;
+          if (!actuatorResponse?.success || !Array.isArray(actuatorResponse.data?.actuators)) return [];
+          return [{ zoneId, actuators: actuatorResponse.data.actuators }];
+        });
+
+        if (actuatorUpdates.length > 0) {
+          setActuatorsByZone((prev) => {
+            const updated = { ...prev };
+            actuatorUpdates.forEach(({ zoneId, actuators }) => {
+              updated[zoneId] = Object.fromEntries(
+                actuators.map((item) => [item.actuatorType, item])
+              );
+            });
+            return updated;
+          });
         }
 
         setIsOnline(validUpdates.length === zoneIds.length);
-
-        if (validUpdates.length < zoneIds.length) {
-          console.warn('Một số khu vực chưa lấy được telemetry.');
-        }
+        if (firstLoad) setActuatorLoading(false);
       } catch (error) {
         if (!cancelled) {
-          console.error('Không thể lấy telemetry:', error.message);
+          console.error('Không thể đồng bộ dữ liệu nhà kính:', error.message);
           setIsOnline(false);
         }
       } finally {
         if (firstLoad) {
           setLoadingApi(false);
+          setActuatorLoading(false);
           firstLoad = false;
         }
-
-        if (!cancelled) {
-          timeoutId = setTimeout(fetchTelemetry, 5000);
-        }
+        if (!cancelled) timeoutId = setTimeout(fetchDashboardData, 5000);
       }
     };
 
-    fetchTelemetry();
-
+    fetchDashboardData();
     return () => {
       cancelled = true;
       clearTimeout(timeoutId);
     };
   }, []);
 
-  // 2. GỬI LỆNH ĐIỀU KHIỂN THIẾT BỊ (POST /greenhouse/actuators/control)[cite: 5]
-  const handleToggleActuator = async (actuatorKey) => {
-    const currentActuator = actuators[actuatorKey];
-    const targetAction = currentActuator.status ? 'TURN_OFF' : 'TURN_ON';
+  const handleToggleActuator = async (actuatorKey, requestedAction) => {
+    const currentActuator = actuatorsByZone[selectedZone]?.[actuatorKey];
 
-    if (actuatorKey === 'IRRIGATION_PUMP' && !currentActuator.status && waterTankLevel < 15.0) {
-      alert('Mực nước bồn chứa dưới 15%. Không thể kích hoạt bơm tưới!');
+    if (!currentActuator) {
+      alert('Chưa tải được trạng thái thiết bị. Vui lòng thử lại.');
       return;
     }
 
+    if (currentActuator.status === 'UNKNOWN' && !requestedAction) {
+      alert('Thiết bị chưa có trạng thái trước đó. Hãy chọn rõ Bật hoặc Tắt trong bảng điều khiển.');
+      return;
+    }
+
+    if (currentActuator.deviceStatus !== 'ACTIVE') {
+      alert(`Thiết bị hiện không sẵn sàng: ${currentActuator.deviceStatus || 'UNKNOWN'}.`);
+      return;
+    }
+
+    const isOn = currentActuator.status === 'ON' || currentActuator.status === 'OPEN';
+    const targetAction = requestedAction || (isOn ? 'TURN_OFF' : 'TURN_ON');
+
+    if (actuatorKey === 'IRRIGATION_PUMP' && targetAction === 'TURN_ON' && (waterTankLevel === null || waterTankLevel < 15)) {
+      alert(waterTankLevel === null
+        ? 'Chưa có dữ liệu mực nước bồn. Không thể kích hoạt bơm tưới.'
+        : 'Mực nước bồn chứa dưới 15%. Không thể kích hoạt bơm tưới!');
+      return;
+    }
+
+    const busyKey = `${selectedZone}:${actuatorKey}`;
+    setActuatorBusy((prev) => ({ ...prev, [busyKey]: true }));
+
     try {
-      const payload = {
+      const response = await apiClient.post('/greenhouse/actuators/control', {
         zoneId: selectedZone,
         actuatorType: actuatorKey,
         action: targetAction,
         ...(actuatorKey === 'IRRIGATION_PUMP' && targetAction === 'TURN_ON'
           ? { durationSeconds: 120 }
           : {})
-      };
+      });
 
-      const response = await apiClient.post('/greenhouse/actuators/control', payload);
-
-      if (response.data?.success) {
-        setActuators(prev => ({
-          ...prev,
-          [actuatorKey]: {
-            ...prev[actuatorKey],
-            status: !prev[actuatorKey].status,
-            mode: 'MANUAL'
-          }
-        }));
-
-        alert(response.data.message || 'Điều khiển thiết bị thành công!');
-      } else {
+      if (!response.data?.success) {
         alert(response.data?.message || 'Backend không xác nhận lệnh điều khiển.');
+        return;
       }
+
+      await refreshZoneActuators(selectedZone);
+      alert(response.data.message || 'Điều khiển thiết bị thành công!');
     } catch (error) {
       const errData = error.response?.data;
-
       if (errData) {
         alert(`LỖI [${errData.errorCode || errData.code || 'API_ERROR'}]: ${errData.message || 'Không thể thực hiện lệnh.'}`);
       } else {
-        alert('Không thể kết nối Backend. Trạng thái thiết bị không thay đổi.');
+        alert(error.message || 'Không thể kết nối Backend.');
       }
+    } finally {
+      setActuatorBusy((prev) => ({ ...prev, [busyKey]: false }));
     }
+  };
+
+  const getActuatorLabel = (actuator) => {
+    if (!actuator) return 'Chưa tải';
+    if (actuator.deviceStatus !== 'ACTIVE') return actuator.deviceStatus || 'Không xác định';
+    if (actuator.status === 'UNKNOWN') return 'Chưa xác định';
+    if (actuator.status === 'OPEN') return 'Đang mở';
+    if (actuator.status === 'CLOSED') return 'Đang đóng';
+    return actuator.status === 'ON' ? 'Đang bật' : 'Đã tắt';
+  };
+
+  const getActuatorStyle = (actuator) => {
+    if (!actuator || actuator.status === 'UNKNOWN') return 'bg-amber-500/15 text-amber-300';
+    if (actuator.deviceStatus !== 'ACTIVE') return 'bg-rose-500/15 text-rose-300';
+    if (actuator.status === 'ON' || actuator.status === 'OPEN') return 'bg-emerald-500/15 text-emerald-300';
+    return 'bg-slate-700 text-slate-300';
   };
 
   const currentZone = zonesData[selectedZone] || zonesData['ZONE-STRAWBERRY-01'];
@@ -270,7 +335,7 @@ export default function App() {
           <div className="bg-slate-800/50 p-3 rounded-xl border border-slate-700/50 flex items-center justify-between">
             <div className="flex items-center space-x-2">
               {isOnline ? <Wifi className="w-4 h-4 text-emerald-400" /> : <WifiOff className="w-4 h-4 text-rose-400" />}
-              <span className="text-xs font-medium text-slate-300">API / MQTT</span>
+              <span className="text-xs font-medium text-slate-300">REST API</span>
             </div>
             <span className={`text-xs px-2 py-0.5 rounded-full ${isOnline ? 'text-emerald-400 bg-emerald-500/10' : 'text-amber-400 bg-amber-500/10'}`}>
               {isOnline ? 'Connected' : 'Offline Mode'}
@@ -389,25 +454,36 @@ export default function App() {
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    {Object.keys(actuators).slice(0, 4).map((key) => {
-                      const act = actuators[key];
+                    {Object.keys(actuatorConfig).map((key) => {
+                      const act = actuatorsByZone[selectedZone]?.[key];
+                      const busy = actuatorBusy[`${selectedZone}:${key}`];
+                      const canToggle = act?.status !== 'UNKNOWN' && act?.deviceStatus === 'ACTIVE' && !busy;
+                      const isOn = act?.status === 'ON' || act?.status === 'OPEN';
                       return (
-                        <div key={key} className="bg-slate-800/60 border border-slate-700/60 p-4 rounded-xl flex items-center justify-between">
-                          <div>
-                            <h4 className="font-semibold text-sm text-slate-200">{act.name}</h4>
-                            <div className="flex items-center space-x-2 mt-1">
-                              <span className={`text-[10px] px-2 py-0.5 rounded-md font-medium uppercase ${act.status ? 'bg-emerald-500/20 text-emerald-400' : 'bg-slate-700 text-slate-400'}`}>
-                                {act.status ? 'Đang chạy' : 'Đã tắt'}
+                        <div key={key} className="bg-slate-800/60 border border-slate-700/60 p-4 rounded-xl flex items-center justify-between gap-3">
+                          <div className="min-w-0">
+                            <h4 className="font-semibold text-sm text-slate-200">{actuatorConfig[key].name}</h4>
+                            <div className="flex flex-wrap items-center gap-2 mt-1">
+                              <span className={`text-[10px] px-2 py-0.5 rounded-md font-medium uppercase ${getActuatorStyle(act)}`}>
+                                {getActuatorLabel(act)}
                               </span>
-                              <span className="text-[10px] text-slate-400 bg-slate-700/50 px-2 py-0.5 rounded-md">{act.mode}</span>
+                              <span className="text-[10px] text-slate-400 bg-slate-700/50 px-2 py-0.5 rounded-md">{act?.mode || 'Chưa có lệnh'}</span>
                             </div>
                           </div>
-                          <button 
-                            onClick={() => handleToggleActuator(key)}
-                            className={`w-12 h-6 flex items-center rounded-full p-1 transition ${act.status ? 'bg-emerald-500 justify-end' : 'bg-slate-700 justify-start'}`}
-                          >
-                            <div className="bg-white w-4 h-4 rounded-full shadow-md"></div>
-                          </button>
+                          {act?.status === 'UNKNOWN' && act?.deviceStatus === 'ACTIVE' ? (
+                            <div className="flex gap-1">
+                              <button onClick={() => handleToggleActuator(key, 'TURN_ON')} className="rounded-lg bg-emerald-600 px-2 py-1 text-[10px] font-semibold text-white">Bật</button>
+                              <button onClick={() => handleToggleActuator(key, 'TURN_OFF')} className="rounded-lg bg-slate-700 px-2 py-1 text-[10px] font-semibold text-white">Tắt</button>
+                            </div>
+                          ) : (
+                            <button
+                              disabled={!canToggle}
+                              onClick={() => handleToggleActuator(key)}
+                              className={`w-12 h-6 shrink-0 flex items-center rounded-full p-1 transition disabled:cursor-not-allowed disabled:opacity-40 ${isOn ? 'bg-emerald-500 justify-end' : 'bg-slate-700 justify-start'}`}
+                            >
+                              <div className="bg-white w-4 h-4 rounded-full shadow-md"></div>
+                            </button>
+                          )}
                         </div>
                       );
                     })}
@@ -422,12 +498,12 @@ export default function App() {
                     <div className="bg-slate-800/50 border border-slate-700/50 p-4 rounded-xl mb-6">
                       <div className="flex justify-between text-sm mb-2">
                         <span className="text-slate-300 font-medium">Mức nước bồn:</span>
-                        <span className="font-bold text-rose-400">{waterTankLevel}%</span>
+                        <span className="font-bold text-slate-200">{waterTankLevel === null ? '--' : `${Number(waterTankLevel).toFixed(1)}%`}</span>
                       </div>
                       <div className="w-full bg-slate-700 h-3 rounded-full overflow-hidden">
-                        <div className="bg-rose-500 h-full rounded-full transition-all" style={{ width: `${waterTankLevel}%` }}></div>
+                        <div className={`h-full rounded-full transition-all ${waterTankLevel !== null && waterTankLevel <= 15 ? 'bg-rose-500' : 'bg-sky-500'}`} style={{ width: `${waterTankLevel === null ? 0 : Math.max(0, Math.min(100, Number(waterTankLevel)))}%` }}></div>
                       </div>
-                      {waterTankLevel < 15 && (
+                      {waterTankLevel !== null && waterTankLevel < 15 && (
                         <p className="text-xs text-rose-400 mt-2 flex items-center space-x-1">
                           <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
                           <span>ERR_WATER_TANK_DEPLETED: Đã khóa bơm!</span>
@@ -436,12 +512,16 @@ export default function App() {
                     </div>
                   </div>
 
-                  <div className="bg-rose-500/10 border border-rose-500/20 p-4 rounded-xl">
+                  <div className={`${waterTankLevel === null ? 'bg-amber-500/10 border-amber-500/20' : waterTankLevel < 15 ? 'bg-rose-500/10 border-rose-500/20' : 'bg-emerald-500/10 border-emerald-500/20'} border p-4 rounded-xl`}>
                     <div className="flex items-start space-x-3">
-                      <AlertOctagon className="w-5 h-5 text-rose-400 shrink-0 mt-0.5" />
+                      <AlertOctagon className={`w-5 h-5 shrink-0 mt-0.5 ${waterTankLevel === null ? 'text-amber-400' : waterTankLevel < 15 ? 'text-rose-400' : 'text-emerald-400'}`} />
                       <div>
-                        <h4 className="text-xs font-bold text-rose-400 uppercase tracking-wider">Trạng thái Failsafe: ACTIVE</h4>
-                        <p className="text-xs text-slate-300 mt-1">Hệ thống ngắt rơ-le bơm tự động do mực nước dưới ngưỡng an toàn.</p>
+                        <h4 className={`text-xs font-bold uppercase tracking-wider ${waterTankLevel === null ? 'text-amber-400' : waterTankLevel < 15 ? 'text-rose-400' : 'text-emerald-400'}`}>
+                          Trạng thái Failsafe: {waterTankLevel === null ? 'CHƯA XÁC ĐỊNH' : waterTankLevel < 15 ? 'ACTIVE' : 'NORMAL'}
+                        </h4>
+                        <p className="text-xs text-slate-300 mt-1">
+                          {waterTankLevel === null ? 'Chưa có dữ liệu mực nước để đánh giá điều kiện an toàn của bơm.' : waterTankLevel < 15 ? 'Hệ thống khóa bơm tưới do mực nước dưới ngưỡng an toàn 15%.' : 'Mực nước đang trên ngưỡng an toàn. Bơm tưới được phép hoạt động nếu các điều kiện khác hợp lệ.'}
+                        </p>
                       </div>
                     </div>
                   </div>
@@ -453,65 +533,13 @@ export default function App() {
           {/* ================= TAB 2: ZONES MAP ================= */}
           {activeTab === 'zones' && (
             <div className="space-y-6">
-              <div className="bg-slate-900 border border-slate-800 p-6 rounded-2xl shadow-xl">
-                <h3 className="text-lg font-bold text-white mb-2">Bản đồ Phân vùng Nhà kính (Greenhouse Zones Topology)</h3>
-                <p className="text-xs text-slate-400 mb-6">Hệ thống nhà kính được chia thành 3 khu vực độc lập phục vụ các giống dâu tây công nghệ cao khác nhau.</p>
-
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                  {Object.keys(zonesData).map((zoneKey) => {
-                    const zone = zonesData[zoneKey];
-                    const isSelected = selectedZone === zoneKey;
-                    return (
-                      <div 
-                        key={zoneKey} 
-                        onClick={() => setSelectedZone(zoneKey)}
-                        className={`border rounded-2xl p-6 cursor-pointer transition relative overflow-hidden ${isSelected ? 'bg-emerald-950/20 border-emerald-500 shadow-lg shadow-emerald-500/10' : 'bg-slate-800/40 border-slate-700 hover:border-slate-500'}`}
-                      >
-                        <div className="flex items-center justify-between mb-4">
-                          <span className="text-xs font-bold px-2.5 py-1 rounded-lg bg-slate-800 text-emerald-400 border border-slate-700">{zoneKey}</span>
-                          <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${zone.status === 'OPTIMAL' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-amber-500/20 text-amber-400'}`}>
-                            {zone.status}
-                          </span>
-                        </div>
-                        <h4 className="font-bold text-base text-white mb-4">{zone.name}</h4>
-                        
-                        <div className="space-y-2 text-xs text-slate-300">
-                          <div className="flex justify-between py-1 border-b border-slate-800">
-                            <span className="text-slate-400">Nhiệt độ không khí:</span>
-                            <span className="font-semibold text-white">{zone.temp}°C</span>
-                          </div>
-                          <div className="flex justify-between py-1 border-b border-slate-800">
-                            <span className="text-slate-400">Độ ẩm không khí:</span>
-                            <span className="font-semibold text-white">{zone.airHumid}%</span>
-                          </div>
-                          <div className="flex justify-between py-1 border-b border-slate-800">
-                            <span className="text-slate-400">Độ ẩm đất:</span>
-                            <span className="font-semibold text-white">{zone.soilHumid}%</span>
-                          </div>
-                          <div className="flex justify-between py-1 border-b border-slate-800">
-                            <span className="text-slate-400">Cường độ sáng:</span>
-                            <span className="font-semibold text-white">{zone.light} Lux</span>
-                          </div>
-                          <div className="flex justify-between py-1 border-b border-slate-800">
-                            <span className="text-slate-400">Độ dẫn điện EC:</span>
-                            <span className="font-semibold text-white">{zone.ec} mS/cm</span>
-                          </div>
-                          <div className="flex justify-between py-1">
-                            <span className="text-slate-400">Độ pH dinh dưỡng:</span>
-                            <span className="font-semibold text-white">{zone.ph}</span>
-                          </div>
-                        </div>
-
-                        {isSelected && (
-                          <div className="mt-4 pt-3 border-t border-emerald-500/30 text-center text-xs text-emerald-400 font-medium">
-                            ✓ Đang chọn theo dõi ở Dashboard chính
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
+              <GreenhouseMap
+                zonesData={zonesData}
+                selectedZone={selectedZone}
+                onSelectZone={setSelectedZone}
+                waterTankLevel={waterTankLevel}
+                actuatorsByZone={actuatorsByZone}
+              />
             </div>
           )}
 
@@ -530,27 +558,52 @@ export default function App() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {Object.keys(actuators).map((key) => {
-                    const act = actuators[key];
-                    return (
-                      <div key={key} className="bg-slate-800/50 border border-slate-700 p-5 rounded-2xl flex items-center justify-between">
-                        <div className="space-y-1">
-                          <div className="flex items-center space-x-2">
-                            <span className="text-xs font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded">{act.pin}</span>
-                            <h4 className="font-bold text-sm text-white">{act.name}</h4>
-                          </div>
-                          <p className="text-xs text-slate-400">Trạng thái: <span className={act.status ? 'text-emerald-400 font-bold' : 'text-slate-400'}>{act.status ? 'ON (Đang hoạt động)' : 'OFF (Đã ngắt)'}</span></p>
-                          <p className="text-xs text-slate-400">Quyền điều khiển: <span className="text-amber-400 font-medium">{act.mode}</span></p>
-                        </div>
+                <div className="mb-5 flex flex-wrap items-center gap-3">
+                  <label className="text-xs text-slate-400" htmlFor="actuator-zone">Khu vực điều khiển</label>
+                  <select
+                    id="actuator-zone"
+                    value={selectedZone}
+                    onChange={(event) => setSelectedZone(event.target.value)}
+                    className="bg-slate-800 border border-slate-700 text-sm rounded-xl px-3 py-2 text-slate-200"
+                  >
+                    {zoneIds.map((zoneId) => <option key={zoneId} value={zoneId}>{zonesData[zoneId]?.name || zoneId}</option>)}
+                  </select>
+                  {actuatorLoading && <span className="text-xs text-amber-300">Đang tải trạng thái thiết bị...</span>}
+                </div>
 
-                        <div className="flex flex-col items-end space-y-3">
-                          <button 
-                            onClick={() => handleToggleActuator(key)}
-                            className={`w-14 h-7 flex items-center rounded-full p-1 transition ${act.status ? 'bg-emerald-500 justify-end' : 'bg-slate-700 justify-start'}`}
-                          >
-                            <div className="bg-white w-5 h-5 rounded-full shadow-md"></div>
-                          </button>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {Object.keys(actuatorConfig).map((key) => {
+                    const act = actuatorsByZone[selectedZone]?.[key];
+                    const busy = actuatorBusy[`${selectedZone}:${key}`];
+                    const canToggle = act?.status !== 'UNKNOWN' && act?.deviceStatus === 'ACTIVE' && !busy;
+                    const isOn = act?.status === 'ON' || act?.status === 'OPEN';
+                    return (
+                      <div key={key} className="bg-slate-800/50 border border-slate-700 p-5 rounded-2xl flex items-center justify-between gap-4">
+                        <div className="space-y-1 min-w-0">
+                          <div className="flex items-center flex-wrap gap-2">
+                            <span className="text-xs font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded">{actuatorConfig[key].pin}</span>
+                            <h4 className="font-bold text-sm text-white">{actuatorConfig[key].name}</h4>
+                          </div>
+                          <p className="text-xs text-slate-400">Trạng thái: <span className={`font-bold ${getActuatorStyle(act).replace(/bg-[^ ]+ /, '')}`}>{getActuatorLabel(act)}</span></p>
+                          <p className="text-xs text-slate-400">Thiết bị: <span className="text-slate-200">{act?.deviceStatus || 'Chưa tải'}</span></p>
+                          <p className="text-xs text-slate-400">Chế độ: <span className="text-amber-400 font-medium">{act?.mode || '--'}</span></p>
+                        </div>
+                        <div className="flex flex-col items-end gap-2 shrink-0">
+                          {act?.status === 'UNKNOWN' && act?.deviceStatus === 'ACTIVE' ? (
+                            <div className="flex gap-2">
+                              <button disabled={busy} onClick={() => handleToggleActuator(key, 'TURN_ON')} className="rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white disabled:opacity-40">Bật</button>
+                              <button disabled={busy} onClick={() => handleToggleActuator(key, 'TURN_OFF')} className="rounded-lg bg-slate-700 px-3 py-2 text-xs font-semibold text-white disabled:opacity-40">Tắt</button>
+                            </div>
+                          ) : (
+                            <button
+                              disabled={!canToggle}
+                              onClick={() => handleToggleActuator(key)}
+                              className={`w-14 h-7 flex items-center rounded-full p-1 transition disabled:cursor-not-allowed disabled:opacity-40 ${isOn ? 'bg-emerald-500 justify-end' : 'bg-slate-700 justify-start'}`}
+                            >
+                              <div className="bg-white w-5 h-5 rounded-full shadow-md"></div>
+                            </button>
+                          )}
+                          <span className="text-[10px] text-slate-500">{busy ? 'Đang gửi lệnh' : canToggle || act?.status === 'UNKNOWN' ? 'Có thể điều khiển' : 'Không thể điều khiển'}</span>
                         </div>
                       </div>
                     );

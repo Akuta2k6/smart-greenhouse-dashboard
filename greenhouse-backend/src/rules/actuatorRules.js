@@ -5,7 +5,8 @@ const ALLOWED_ACTUATORS = [
   'IRRIGATION_PUMP',
   'VENTILATION_FAN',
   'SHADE_NET',
-  'FOG_HEATER'
+  'FOG_HEATER',
+  'NUTRIENT_VALVE'
 ];
 
 const validateActuatorCommand = (systemState, payload) => {
@@ -54,15 +55,28 @@ const validateActuatorCommand = (systemState, payload) => {
 
   if (
     actuatorType === 'IRRIGATION_PUMP' &&
-    action === 'TURN_ON' &&
-    systemState.waterTankLevel < 15.0
+    action === 'TURN_ON'
   ) {
-    return {
-      valid: false,
-      status: 400,
-      errorCode: 'ERR_WATER_TANK_DEPLETED',
-      message: `Không thể bật bơm do mức nước bồn hiện tại là ${systemState.waterTankLevel}% (< 15.0%).`
-    };
+    if (
+      systemState.waterTankLevel === null ||
+      !Number.isFinite(systemState.waterTankLevel)
+    ) {
+      return {
+        valid: false,
+        status: 503,
+        errorCode: 'ERR_WATER_TANK_DATA_UNAVAILABLE',
+        message: 'Chưa có dữ liệu mức nước bồn. Không thể bật bơm an toàn.'
+      };
+    }
+
+    if (systemState.waterTankLevel < 15.0) {
+      return {
+        valid: false,
+        status: 400,
+        errorCode: 'ERR_WATER_TANK_DEPLETED',
+        message: `Không thể bật bơm do mức nước bồn hiện tại là ${systemState.waterTankLevel}% (< 15.0%).`
+      };
+    }
   }
 
   return { valid: true };

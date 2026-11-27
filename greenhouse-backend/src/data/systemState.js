@@ -1,6 +1,6 @@
 
 const systemState = {
-  waterTankLevel: 12.0,
+  waterTankLevel: null,
   zones: {
     'ZONE-STRAWBERRY-01': {
       zoneId: 'ZONE-STRAWBERRY-01',
@@ -18,7 +18,8 @@ const systemState = {
         IRRIGATION_PUMP: 'OFF',
         VENTILATION_FAN: 'ON',
         SHADE_NET: 'CLOSED',
-        FOG_HEATER: 'OFF'
+        FOG_HEATER: 'OFF',
+        NUTRIENT_VALVE: 'OFF'
       }
     },
     'ZONE-STRAWBERRY-02': {
@@ -37,7 +38,8 @@ const systemState = {
         IRRIGATION_PUMP: 'OFF',
         VENTILATION_FAN: 'ON',
         SHADE_NET: 'OPEN',
-        FOG_HEATER: 'OFF'
+        FOG_HEATER: 'OFF',
+        NUTRIENT_VALVE: 'OFF'
       }
     },
     'ZONE-STRAWBERRY-03': {
@@ -56,7 +58,8 @@ const systemState = {
         IRRIGATION_PUMP: 'OFF',
         VENTILATION_FAN: 'OFF',
         SHADE_NET: 'CLOSED',
-        FOG_HEATER: 'OFF'
+        FOG_HEATER: 'OFF',
+        NUTRIENT_VALVE: 'OFF'
       }
     }
   }
