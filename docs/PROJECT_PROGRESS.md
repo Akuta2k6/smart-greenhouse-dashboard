@@ -290,6 +290,184 @@ Tested the following automatic control behaviors:
 - [ ] Independently verified early irrigation stop when soil moisture reaches 80% in AUTO mode.
 
 
+## Phase 12 – Frontend Integration & End-to-End Verification
+
+**Status: COMPLETED**
+
+### 1. Objectives
+
+Integrate the Incident Management API with the React Dashboard and verify the complete communication flow between the Frontend, Backend, PostgreSQL database, Rule Engine, and Python Sensor Simulator.
+
+### 2. Implementation
+
+Updated the following frontend files:
+
+- `src/services/api.js`
+- `src/App.jsx`
+
+Implemented the following features:
+
+- Integrated the `getIncidents()` API function into the Frontend.
+- Retrieved incident records from the Backend.
+- Displayed incident information on the Dashboard, including priority, status, zone, timestamp, and description.
+- Supported filtering incidents by the selected greenhouse zone.
+- Automatically refreshed incident data every 5 seconds.
+- Connected the incident interface with the existing Backend API.
+
+### 3. End-to-End Verification
+
+**High-temperature scenario:**
+
+- Executed the `high-temperature` Simulator scenario.
+- Successfully processed telemetry for all three greenhouse zones.
+- Created a CRITICAL incident in Zone 01.
+- Automatically activated the cooling fan and opened the shade system.
+- Verified that the pump activation request in Zone 02 was skipped because the 15-minute cooldown period was still active.
+- Verified the incident record in PostgreSQL and its display on the Frontend.
+
+**Normal scenario:**
+
+- Restored the Simulator to normal environmental conditions.
+- Automatically turned off the cooling fan.
+- Automatically closed the shade system.
+- Updated the related incident from `OPEN` to `RESOLVED`.
+- Confirmed that the Frontend displayed the updated incident status.
+
+### 4. Validation
+
+- Verified Frontend–Backend communication.
+- Verified incident retrieval from PostgreSQL through the API.
+- Verified automatic incident creation and resolution.
+- Verified automatic actuator control under abnormal environmental conditions.
+- Verified that the Frontend correctly displayed incident information and status updates.
+- Confirmed that no errors occurred during the tested end-to-end scenarios.
+
+### 5. Status
+
+- [x] Integrated Incident API into the Frontend.
+- [x] Implemented incident display on the Dashboard.
+- [x] Implemented zone-based incident filtering.
+- [x] Implemented automatic incident data refresh.
+- [x] Tested high-temperature automation.
+- [x] Tested automatic recovery under normal conditions.
+- [x] Verified incident creation and resolution through the complete system.
+- [x] Completed Git commit and push.
+
+
+## Phase 13 – Final System Audit & Demo Preparation
+
+**Status: IN PROGRESS**
+
+### 1. Objectives
+
+Perform a final technical audit of the Smart Strawberry Greenhouse system, verify the quality and stability of the source code, execute automated tests, and prepare the project for demonstration.
+
+### 2. Frontend Code Quality & Build Verification
+
+Reviewed and cleaned up the Frontend source code.
+
+The following issues were fixed:
+
+- Removed unused variables and imports.
+- Fixed unused function parameters.
+- Improved React state and effect handling.
+- Replaced unnecessary state variables with references where appropriate.
+- Stabilized effect dependencies.
+- Improved timeout and cleanup handling in React effects.
+
+**Validation:**
+
+- `npm run lint`: PASSED – 0 errors and 0 warnings across 28 files.
+- `npm run build`: PASSED.
+- Vite production build completed successfully.
+- Generated production assets successfully.
+
+### 3. Backend Automated Testing
+
+Reviewed and executed the Backend automated test suite using Node.js built-in `node:test`.
+
+Fixed the water tank protection test to verify that pump activation is rejected when the water tank level is below 15%.
+
+The test verifies:
+
+- HTTP 400 response.
+- Error code `ERR_WATER_TANK_DEPLETED`.
+- Restoration of the original water tank state after the test.
+
+**Validation:**
+
+- Backend automated tests: 17/17 PASSED.
+- No failing tests.
+
+### 4. Python Simulator Automated Testing
+
+Converted the existing Simulator test scripts into automated tests using `pytest`.
+
+Updated the following files:
+
+- `greenhouse-backend/simulator/test_config.py`
+- `greenhouse-backend/simulator/test_simulator.py`
+
+Implemented tests for:
+
+- Environment file availability.
+- Database configuration validation.
+- Simulation interval validation.
+- Telemetry generation for all three greenhouse zones.
+- Required sensor metrics.
+- Sensor value boundaries.
+- High-temperature scenario.
+- High-humidity scenario.
+- Low-humidity scenario.
+- Low-soil-moisture scenario.
+- Low-water-tank scenario.
+- Soil-moisture recovery scenario.
+- Invalid scenario handling.
+- Resetting sensor states under normal conditions.
+
+**Validation:**
+
+- Python Simulator automated tests: 14/14 PASSED.
+- Test execution time: 0.11 seconds.
+
+### 5. Overall Validation Results
+
+| Component | Validation | Result |
+|---|---|---|
+| Frontend | `npm run lint` | PASSED – 0 warnings, 0 errors |
+| Frontend | `npm run build` | PASSED |
+| Backend | `npm test` | PASSED – 17/17 tests |
+| Python Simulator | `python -m pytest .\simulator -v` | PASSED – 14/14 tests |
+| End-to-End System | Frontend–Backend integration | PASSED |
+| Automation | Environmental scenarios | PASSED |
+
+### 6. Remaining Tasks
+
+- [x] Complete Frontend code quality checks.
+- [x] Verify Frontend production build.
+- [x] Complete Backend automated tests.
+- [x] Convert Simulator scripts into automated tests.
+- [x] Complete Python Simulator automated tests.
+- [ ] Review and update the project README.
+- [ ] Review database migrations and project setup instructions.
+- [ ] Complete the final system audit.
+- [ ] Prepare the final demonstration workflow.
+- [ ] Commit and push the completed Phase 13 changes.
+
+### 7. Conclusion
+
+Phase 13 has successfully completed the major code quality checks and automated testing for the Frontend, Backend, and Python Simulator.
+
+All current automated tests have passed:
+
+- Frontend lint: 0 errors and 0 warnings.
+- Backend: 17/17 tests passed.
+- Python Simulator: 14/14 tests passed.
+
+The project is currently undergoing its final documentation review and demonstration preparation before the final milestone is completed.
+
+**Current Status: IN PROGRESS – Core validation completed; documentation review and final demo preparation remain.**
+
 ### Pending
 - Add telemetry history and alerts.
 - Improve Dashboard and charts.

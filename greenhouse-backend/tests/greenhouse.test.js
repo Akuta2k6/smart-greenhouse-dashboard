@@ -123,19 +123,30 @@ test('Action không hợp lệ trả về HTTP 400', async () => {
 });
 
 test('Máy bơm bị chặn khi mực nước dưới 15%', async () => {
-  const response = await sendRequest(
-    '/api/v1/greenhouse/actuators/control',
-    {
-      method: 'POST',
-      body: JSON.stringify({
-        zoneId: 'ZONE-STRAWBERRY-01',
-        actuatorType: 'IRRIGATION_PUMP',
-        action: 'TURN_ON'
-      })
-    }
-  );
+  const originalWaterTankLevel = systemState.waterTankLevel;
 
-  assert.equal(response.status, 400);
+  try {
+    systemState.waterTankLevel = 10;
+
+    const response = await sendRequest(
+      '/api/v1/greenhouse/actuators/control',
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          zoneId: 'ZONE-STRAWBERRY-01',
+          actuatorType: 'IRRIGATION_PUMP',
+          action: 'TURN_ON'
+        })
+      }
+    );
+
+    const result = await response.json();
+
+    assert.equal(response.status, 400);
+    assert.equal(result.errorCode, 'ERR_WATER_TANK_DEPLETED');
+  } finally {
+    systemState.waterTankLevel = originalWaterTankLevel;
+  }
 });
 
 

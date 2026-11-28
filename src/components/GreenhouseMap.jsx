@@ -131,7 +131,6 @@ export default function GreenhouseMap({
   const water = hasWaterLevel ? Math.max(0, Math.min(100, Number(waterTankLevel))) : null;
   const waterColor = water === null ? 'bg-slate-600' : water <= 15 ? 'bg-rose-500' : water <= 30 ? 'bg-amber-400' : 'bg-sky-400';
 
-  const selectedIndex = Math.max(0, ZONE_IDS.indexOf(selectedZone));
   const selectedData = zonesData[selectedZone] || zonesData[ZONE_IDS[0]];
   const selectedStatus = getStatus(selectedData?.status);
 
@@ -314,7 +313,6 @@ export default function GreenhouseMap({
           <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
             {ZONE_INFO.map((info, index) => {
               const zone = zonesData[ZONE_IDS[index]];
-              const status = getStatus(zone?.status);
 
               return (
                 <ZoneCard

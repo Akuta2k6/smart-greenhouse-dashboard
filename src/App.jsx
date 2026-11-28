@@ -1,5 +1,4 @@
-import React, { useState, useEffect } from 'react';
-import apiClient, { getTelemetryLatest, getZoneActuators, getIncidents } from './services/api';
+import React, { useState, useEffect, useRef } from 'react';import apiClient, { getTelemetryLatest, getZoneActuators, getIncidents } from './services/api';
 import GreenhouseMap from './components/GreenhouseMap';
 import { 
   Thermometer, 
@@ -15,6 +14,12 @@ import {
   Sliders,
   AlertOctagon
 } from 'lucide-react';
+
+const zoneIds = Object.freeze([
+  'ZONE-STRAWBERRY-01',
+  'ZONE-STRAWBERRY-02',
+  'ZONE-STRAWBERRY-03'
+]);
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('overview');
@@ -75,23 +80,25 @@ export default function App() {
   const [incidentError, setIncidentError] = useState('');
   const [incidentZoneFilter, setIncidentZoneFilter] = useState('');
 
-  const zoneIds = [
-    'ZONE-STRAWBERRY-01',
-    'ZONE-STRAWBERRY-02',
-    'ZONE-STRAWBERRY-03'
-  ];
+  const incidentFirstLoadRef = useRef(true);
+  const dashboardFirstLoadRef = useRef(true);
+
+  const incidentTimeoutRef = useRef(null);
+  const dashboardTimeoutRef = useRef(null);
+
+  const incidentCancelledRef = useRef(false);
+  const dashboardCancelledRef = useRef(false);
 
   useEffect(() => {
-    let cancelled = false;
-    let timeoutId;
-    let firstLoad = true;
+    incidentCancelledRef.current = false;
+    incidentFirstLoadRef.current = true;
 
     const fetchIncidents = async () => {
-      if (firstLoad) setIncidentLoading(true);
+      if (incidentFirstLoadRef.current) setIncidentLoading(true);
 
       try {
         const response = await getIncidents(incidentZoneFilter || null);
-        if (cancelled) return;
+        if (incidentCancelledRef.current) return;
 
         if (!response?.success || !Array.isArray(response.data?.incidents)) {
           throw new Error('Dữ liệu sự cố từ Backend không đúng định dạng.');
@@ -100,23 +107,25 @@ export default function App() {
         setIncidents(response.data.incidents);
         setIncidentError('');
       } catch (error) {
-        if (!cancelled) {
+        if (!incidentCancelledRef.current) {
           setIncidentError(error.response?.data?.message || error.message || 'Không thể tải danh sách sự cố.');
         }
       } finally {
-        if (firstLoad) {
+        if (incidentFirstLoadRef.current) {
           setIncidentLoading(false);
-          firstLoad = false;
+          incidentFirstLoadRef.current = false;
         }
-        if (!cancelled) timeoutId = setTimeout(fetchIncidents, 5000);
+        if (!incidentCancelledRef.current) {
+          incidentTimeoutRef.current = setTimeout(fetchIncidents, 5000);
+        }
       }
     };
 
     fetchIncidents();
 
     return () => {
-      cancelled = true;
-      clearTimeout(timeoutId);
+      incidentCancelledRef.current = true;
+      clearTimeout(incidentTimeoutRef.current);
     };
   }, [incidentZoneFilter]);
 
@@ -158,12 +167,11 @@ export default function App() {
   };
 
   useEffect(() => {
-    let cancelled = false;
-    let timeoutId;
-    let firstLoad = true;
+    dashboardCancelledRef.current = false;
+    dashboardFirstLoadRef.current = true;
 
     const fetchDashboardData = async () => {
-      if (firstLoad) {
+      if (dashboardFirstLoadRef.current) {
         setLoadingApi(true);
         setActuatorLoading(true);
       }
@@ -183,7 +191,7 @@ export default function App() {
           })
         );
 
-        if (cancelled) return;
+        if (dashboardCancelledRef.current) return;
 
         const validUpdates = results.flatMap((result) => {
           if (result.status !== 'fulfilled') return [];
@@ -237,26 +245,28 @@ export default function App() {
         }
 
         setIsOnline(validUpdates.length === zoneIds.length);
-        if (firstLoad) setActuatorLoading(false);
+        if (dashboardFirstLoadRef.current) setActuatorLoading(false);
       } catch (error) {
-        if (!cancelled) {
+        if (!dashboardCancelledRef.current) {
           console.error('Không thể đồng bộ dữ liệu nhà kính:', error.message);
           setIsOnline(false);
         }
       } finally {
-        if (firstLoad) {
+        if (dashboardFirstLoadRef.current) {
           setLoadingApi(false);
           setActuatorLoading(false);
-          firstLoad = false;
+          dashboardFirstLoadRef.current = false;
         }
-        if (!cancelled) timeoutId = setTimeout(fetchDashboardData, 5000);
+        if (!dashboardCancelledRef.current) {
+          dashboardTimeoutRef.current = setTimeout(fetchDashboardData, 5000);
+        }
       }
     };
 
     fetchDashboardData();
     return () => {
-      cancelled = true;
-      clearTimeout(timeoutId);
+      dashboardCancelledRef.current = true;
+      clearTimeout(dashboardTimeoutRef.current);
     };
   }, []);
 
